@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputPath>$(ResourceRoot)client\</OutputPath>
+    <IsResourceRootProject>true</IsResourceRootProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="vMenu.Enhanced.ClientAPI" />
+    <ProjectReference Include="$(MSBuildThisFileDirectory)..\shared\RoutingBucketsPlugin.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,21 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Configurations>Release;Debug</Configurations>
+    <DebugType>embedded</DebugType>
+
+    <ResourceName>vMenu.RoutingBucketsPlugin</ResourceName>
+    <ResourceRoot>$(MSBuildThisFileDirectory)build\$(ResourceName)\</ResourceRoot>
+
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+</Project>

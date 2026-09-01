@@ -1,0 +1,17 @@
+<Solution>
+  <Configurations>
+    <BuildType Name="Debug" />
+    <BuildType Name="Release" />
+  </Configurations>
+  <Folder Name="/Solution Items/">
+    <File Path="fxmanifest.lua" />
+    <File Path="README.md" />
+    <File Path="LICENSE.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Build.targets" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Project Path="shared/RoutingBucketsPlugin.Shared.csproj" />
+  <Project Path="client/RoutingBucketsPlugin.Client.csproj" />
+  <Project Path="server/RoutingBucketsPlugin.Server.csproj" />
+</Solution>

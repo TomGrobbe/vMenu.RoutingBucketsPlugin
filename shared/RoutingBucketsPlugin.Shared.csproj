@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputPath>$(MSBuildThisFileDirectory)..\build\intermediate\shared\</OutputPath>
+  </PropertyGroup>
+
+</Project>

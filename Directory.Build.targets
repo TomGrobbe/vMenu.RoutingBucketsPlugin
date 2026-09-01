@@ -1,0 +1,20 @@
+<Project>
+
+  <ItemGroup Condition="'$(IsResourceRootProject)' == 'true'">
+    <ResourceRootFile Include="$(MSBuildThisFileDirectory)fxmanifest.lua" />
+    <ResourceRootFile Include="$(MSBuildThisFileDirectory)README.md" />
+    <ResourceRootFile Include="$(MSBuildThisFileDirectory)LICENSE.md" />
+  </ItemGroup>
+
+  <Target Name="CopyResourceRootFiles"
+          AfterTargets="Build"
+          Condition="'$(IsResourceRootProject)' == 'true'">
+
+    <Copy SourceFiles="@(ResourceRootFile)"
+          DestinationFolder="$(ResourceRoot)"
+          SkipUnchangedFiles="true" />
+
+    <Message Importance="high" Text="Resource ready: $(ResourceRoot)" />
+  </Target>
+
+</Project>

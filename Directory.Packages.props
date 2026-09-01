@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="vMenu.Enhanced.ClientAPI" Version="0.0.1-alpha.94" />
+    <PackageVersion Include="vMenu.Enhanced.ServerAPI" Version="0.0.1-alpha.94" />
+  </ItemGroup>
+</Project>

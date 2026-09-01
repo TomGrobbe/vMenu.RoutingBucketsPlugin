@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  RESOURCE: vMenu.RoutingBucketsPlugin
+
+jobs:
+  release:
+    name: Build and release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v3
+        with:
+          versionSpec: '6.x'
+
+      - name: Work out the version
+        id: version
+        uses: gittools/actions/gitversion/execute@v3
+        with:
+          useConfigFile: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Stamp the manifest
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.majorMinorPatch }}"
+
+          sed -i "s/^version '[^']*'/version '$VERSION'/" fxmanifest.lua
+
+          grep -q "^version '$VERSION'" fxmanifest.lua || {
+            echo "The version line in fxmanifest.lua was not replaced."
+            exit 1
+          }
+
+      - name: Build
+        shell: bash
+        run: |
+          dotnet build ${{ env.RESOURCE }}.slnx -c Release \
+            -p:Version="${{ steps.version.outputs.majorMinorPatch }}" \
+            -p:AssemblyVersion="${{ steps.version.outputs.assemblySemVer }}" \
+            -p:FileVersion="${{ steps.version.outputs.assemblySemFileVer }}"
+
+      - name: Check the manifest lists every client assembly
+        shell: bash
+        run: |
+          sed -n '/^files {/,/^}/p' fxmanifest.lua \
+            | grep -o "client/[A-Za-z0-9._]*\.dll" | sed 's|client/||' | sort > declared.txt
+
+          ls "build/${{ env.RESOURCE }}/client/"*.dll | xargs -n1 basename \
+            | grep -v "^${{ env.RESOURCE }}.Client.dll$" | sort > built.txt
+
+          if ! diff declared.txt built.txt; then
+            echo "fxmanifest.lua does not match what the build produced."
+            exit 1
+          fi
+
+      - name: Package
+        id: package
+        shell: bash
+        run: |
+          ZIP="${{ env.RESOURCE }}-v${{ steps.version.outputs.majorMinorPatch }}.zip"
+
+          cd build
+          zip -r "../$ZIP" "${{ env.RESOURCE }}"
+          cd ..
+
+          unzip -l "$ZIP"
+
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        shell: bash
+        run: |
+          LAST_TAG=$(git tag --sort=-version:refname | grep '^v' | head -n 1 || true)
+
+          if [ -n "$LAST_TAG" ]; then
+            git log "$LAST_TAG..HEAD" --pretty=format:'- `%h` (%an) %s' > changelog.txt
+          else
+            git log --pretty=format:'- `%h` (%an) %s' > changelog.txt
+          fi
+
+          echo "Changelog since: ${LAST_TAG:-<beginning>}"
+          cat changelog.txt
+
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "Drop the \`${{ env.RESOURCE }}\` folder from the zip into your server's resources, then \`ensure ${{ env.RESOURCE }}\`."
+            echo ""
+            echo "Needs vMenu Enhanced. The plugin API packages this is built against are pinned in \`Directory.Packages.props\`, so keep them in step with the vMenu your server runs."
+            echo ""
+            echo "### Changes"
+            echo ""
+            cat changelog.txt
+          } > release_notes.md
+
+          gh release create "v${{ steps.version.outputs.majorMinorPatch }}" \
+            --title "vMenu Routing Buckets v${{ steps.version.outputs.majorMinorPatch }}" \
+            --notes-file release_notes.md \
+            --latest \
+            --target "$GITHUB_SHA" \
+            "${{ steps.package.outputs.zip }}"
