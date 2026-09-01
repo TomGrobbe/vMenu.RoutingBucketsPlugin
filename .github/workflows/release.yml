@@ -14,6 +14,7 @@ permissions:
 
 env:
   RESOURCE: vMenu.RoutingBucketsPlugin
+  GITVERSION_VERSION: 6.8.2
 
 jobs:
   release:
@@ -26,26 +27,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install GitVersion
-        uses: gittools/actions/gitversion/setup@v3
-        with:
-          versionSpec: '6.x'
-
-      - name: Work out the version
-        id: version
-        uses: gittools/actions/gitversion/execute@v3
-        with:
-          useConfigFile: true
-
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
 
+      - name: Work out the version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          dotnet tool install --global GitVersion.Tool --version "$GITVERSION_VERSION"
+          export PATH="$PATH:$HOME/.dotnet/tools"
+
+          dotnet-gitversion /output json | tee gitversion.json
+
+          VERSION=$(jq -er '.MajorMinorPatch' gitversion.json)
+          ASSEMBLY=$(jq -er '.AssemblySemVer' gitversion.json)
+          FILE=$(jq -er '.AssemblySemFileVer' gitversion.json)
+
+          {
+            echo "version=$VERSION"
+            echo "assembly=$ASSEMBLY"
+            echo "file=$FILE"
+            echo "tag=v$VERSION"
+            echo "zip=${RESOURCE}-v${VERSION}.zip"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Version: $VERSION"
+
       - name: Stamp the manifest
         shell: bash
         run: |
-          VERSION="${{ steps.version.outputs.majorMinorPatch }}"
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.version }}"
 
           sed -i "s/^version '[^']*'/version '$VERSION'/" fxmanifest.lua
 
@@ -57,19 +74,21 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          dotnet build ${{ env.RESOURCE }}.slnx -c Release \
-            -p:Version="${{ steps.version.outputs.majorMinorPatch }}" \
-            -p:AssemblyVersion="${{ steps.version.outputs.assemblySemVer }}" \
-            -p:FileVersion="${{ steps.version.outputs.assemblySemFileVer }}"
+          dotnet build "${RESOURCE}.slnx" -c Release \
+            -p:Version="${{ steps.version.outputs.version }}" \
+            -p:AssemblyVersion="${{ steps.version.outputs.assembly }}" \
+            -p:FileVersion="${{ steps.version.outputs.file }}"
 
       - name: Check the manifest lists every client assembly
         shell: bash
         run: |
+          set -euo pipefail
+
           sed -n '/^files {/,/^}/p' fxmanifest.lua \
             | grep -o "client/[A-Za-z0-9._]*\.dll" | sed 's|client/||' | sort > declared.txt
 
-          ls "build/${{ env.RESOURCE }}/client/"*.dll | xargs -n1 basename \
-            | grep -v "^${{ env.RESOURCE }}.Client.dll$" | sort > built.txt
+          ls "build/${RESOURCE}/client/"*.dll | xargs -n1 basename \
+            | grep -v "^${RESOURCE}.Client.dll$" | sort > built.txt
 
           if ! diff declared.txt built.txt; then
             echo "fxmanifest.lua does not match what the build produced."
@@ -77,18 +96,15 @@ jobs:
           fi
 
       - name: Package
-        id: package
         shell: bash
         run: |
-          ZIP="${{ env.RESOURCE }}-v${{ steps.version.outputs.majorMinorPatch }}.zip"
+          set -euo pipefail
 
           cd build
-          zip -r "../$ZIP" "${{ env.RESOURCE }}"
+          zip -r "../${{ steps.version.outputs.zip }}" "$RESOURCE"
           cd ..
 
-          unzip -l "$ZIP"
-
-          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          unzip -l "${{ steps.version.outputs.zip }}"
 
       - name: Generate changelog
         shell: bash
@@ -109,8 +125,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
+
           {
-            echo "Drop the \`${{ env.RESOURCE }}\` folder from the zip into your server's resources, then \`ensure ${{ env.RESOURCE }}\`."
+            echo "Drop the \`${RESOURCE}\` folder from the zip into your server's resources, then \`ensure ${RESOURCE}\`."
             echo ""
             echo "Needs vMenu Enhanced. The plugin API packages this is built against are pinned in \`Directory.Packages.props\`, so keep them in step with the vMenu your server runs."
             echo ""
@@ -119,9 +137,9 @@ jobs:
             cat changelog.txt
           } > release_notes.md
 
-          gh release create "v${{ steps.version.outputs.majorMinorPatch }}" \
-            --title "vMenu Routing Buckets v${{ steps.version.outputs.majorMinorPatch }}" \
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "vMenu Routing Buckets v${{ steps.version.outputs.version }}" \
             --notes-file release_notes.md \
             --latest \
             --target "$GITHUB_SHA" \
-            "${{ steps.package.outputs.zip }}"
+            "${{ steps.version.outputs.zip }}"
