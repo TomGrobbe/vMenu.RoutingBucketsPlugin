@@ -1,6 +1,6 @@
 workflow: GitHubFlow/v1
 
-tag-prefix: 'v'
+tag-prefix: '[vV]?'
 
 next-version: 1.0.0
 

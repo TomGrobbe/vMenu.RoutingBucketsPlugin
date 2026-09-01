@@ -84,11 +84,18 @@ jobs:
         run: |
           set -euo pipefail
 
+          CLIENT_DLL=$(grep -o "^client_script 'client/[A-Za-z0-9._]*\.dll'" fxmanifest.lua | grep -o "[A-Za-z0-9._]*\.dll")
+
+          if [ -z "$CLIENT_DLL" ]; then
+            echo "Could not read the client_script line from fxmanifest.lua."
+            exit 1
+          fi
+
           sed -n '/^files {/,/^}/p' fxmanifest.lua \
             | grep -o "client/[A-Za-z0-9._]*\.dll" | sed 's|client/||' | sort > declared.txt
 
           ls "build/${RESOURCE}/client/"*.dll | xargs -n1 basename \
-            | grep -v "^${RESOURCE}.Client.dll$" | sort > built.txt
+            | grep -v "^${CLIENT_DLL}$" | sort > built.txt
 
           if ! diff declared.txt built.txt; then
             echo "fxmanifest.lua does not match what the build produced."
