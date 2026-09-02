@@ -134,10 +134,15 @@ jobs:
         run: |
           set -euo pipefail
 
+          VMENU_VERSION=$(grep -o 'Include="vMenu.Enhanced.ClientAPI" Version="[^"]*"' Directory.Packages.props | grep -o 'Version="[^"]*"' | cut -d'"' -f2)
+
+          if [ -z "$VMENU_VERSION" ]; then
+            echo "Could not read the vMenu.Enhanced.ClientAPI version from Directory.Packages.props."
+            exit 1
+          fi
+
           {
-            echo "Drop the \`${RESOURCE}\` folder from the zip into your server's resources, then \`ensure ${RESOURCE}\`."
-            echo ""
-            echo "Needs vMenu Enhanced. The plugin API packages this is built against are pinned in \`Directory.Packages.props\`, so keep them in step with the vMenu your server runs."
+            echo "Made for version \`${VMENU_VERSION}\` of vMenu Enhanced. Usage of other vMenu versions may work but is at your own risk."
             echo ""
             echo "### Changes"
             echo ""
