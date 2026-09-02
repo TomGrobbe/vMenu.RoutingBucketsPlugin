@@ -1,4 +1,5 @@
 using CitizenFX.FiveM.Server;
+using CitizenFX.FiveM.Shared.Serialization;
 
 namespace RoutingBucketsPlugin.Server;
 
@@ -47,7 +48,7 @@ public static class CommandRateLimit
         return true;
     }
 
-    private static void OnPlayerDropped(int source, string? reason) => Windows.Remove(source);
+    private static void OnPlayerDropped([FromSource] int source, string? reason = null) => Windows.Remove(source);
 
     private sealed class Window
     {

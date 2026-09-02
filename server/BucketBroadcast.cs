@@ -1,4 +1,5 @@
 using CitizenFX.FiveM.Server;
+using CitizenFX.FiveM.Shared.Serialization;
 
 using RoutingBucketsPlugin.Shared;
 
@@ -54,7 +55,7 @@ public static class BucketBroadcast
         SendTo(serverId, BucketOccupancy.BucketOf(serverId), buckets, occupants);
     }
 
-    private static void OnPlayerDropped(int source, string? reason) => _lastOccupants = string.Empty;
+    private static void OnPlayerDropped([FromSource] int source, string? reason = null) => _lastOccupants = string.Empty;
 
     private static void Tick()
     {
