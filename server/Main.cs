@@ -21,11 +21,11 @@ public sealed class Main : IScript
             .AddPermission(
                 Permissions.View,
                 "Lets someone open the Routing Buckets menu and see which worlds exist and who is in them.",
-                staffOnly: true)
+                staffOnly: false)
             .AddPermission(
                 Permissions.Join,
                 "Lets someone move themselves between worlds, including to whichever world another player is in.",
-                staffOnly: true)
+                staffOnly: false)
             .AddPermission(
                 Permissions.Manage,
                 "Lets someone create, rename and delete worlds.",

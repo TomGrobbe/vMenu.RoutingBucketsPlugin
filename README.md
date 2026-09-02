@@ -29,16 +29,26 @@ still works, but names are forgotten on every restart.
 
 ## Permissions
 
-All staff permissions, prefixed with `vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.`, and
-`.All` grants every one.
+Every permission is prefixed with `vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.`, and `.All`
+grants all of them at once. The example config gives everyone the two harmless ones and keeps the
+rest for admins, which you can of course change to whatever suits your server.
 
-| Permission | What it allows |
-| --- | --- |
-| `View` | Opening the menu, seeing the worlds and who is in them |
-| `Join` | Moving yourself between worlds |
-| `Manage` | Creating, renaming and deleting worlds |
-| `World` | Changing a world's ambient traffic and entity lockdown |
-| `Move` | Moving other players between worlds, and emptying a world |
+| Permission | Default | What it allows |
+| --- | --- | --- |
+| `View` | everyone | Opening the menu, seeing the worlds and who is in them |
+| `Join` | everyone | Moving yourself between worlds |
+| `Manage` | admin | Creating, renaming and deleting worlds |
+| `World` | admin | Changing a world's ambient traffic and entity lockdown |
+| `Move` | admin | Moving other players between worlds, and emptying a world |
+
+```ini
+add_ace group.admin "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.All" allow
+add_ace builtin.everyone "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.Join" allow
+add_ace group.admin "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.Manage" allow
+add_ace group.admin "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.Move" allow
+add_ace builtin.everyone "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.View" allow
+add_ace group.admin "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.World" allow
+```
 
 ## License
 
