@@ -15,6 +15,7 @@ public sealed class Main : IScript
 
         CommandRateLimit.Register();
         CommandRouter.Register();
+        ServerCommandRouter.Register();
         BucketBroadcast.Register();
 
         var declaration = new ServerPluginDeclaration("Routing Buckets")

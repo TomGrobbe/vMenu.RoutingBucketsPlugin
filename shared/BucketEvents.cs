@@ -13,4 +13,12 @@ public static class BucketEvents
     public const string Result = Prefix + "Result";
 
     public const string Moved = Prefix + "Moved";
+
+    public const string ServerState = Prefix + "ServerState";
+
+    public const string RequestServerState = Prefix + "RequestServerState";
+
+    public const string ServerCommand = Prefix + "ServerCommand";
+
+    public const string ServerCommandResult = Prefix + "ServerCommandResult";
 }

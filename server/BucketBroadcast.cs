@@ -3,6 +3,7 @@ using CitizenFX.FiveM.Shared.Serialization;
 
 using RoutingBucketsPlugin.Shared;
 
+using System.Globalization;
 using System.Text;
 
 using vMenu.Enhanced.ServerAPI;
@@ -19,6 +20,8 @@ public static class BucketBroadcast
 
     private static string _lastOccupants = string.Empty;
 
+    private static string _lastWorldsJson = string.Empty;
+
     private static bool _registered;
 
     public static void Register()
@@ -31,8 +34,11 @@ public static class BucketBroadcast
         _registered = true;
 
         API.OnEvent(DroppedEvent, new Action<int, string?>(OnPlayerDropped), false);
+        API.OnEvent(BucketEvents.RequestServerState, new Action(OnWorldsRequested), false);
 
         API.SetInterval(Tick, TickMs);
+
+        PublishWorlds(force: true);
     }
 
     public static void PushNow()
@@ -41,6 +47,8 @@ public static class BucketBroadcast
 
         _lastBuckets = buckets;
         _lastOccupants = occupants;
+
+        PublishWorlds();
 
         foreach (var occupant in BucketOccupancy.Snapshot())
         {
@@ -57,8 +65,12 @@ public static class BucketBroadcast
 
     private static void OnPlayerDropped([FromSource] int source, string? reason = null) => _lastOccupants = string.Empty;
 
+    private static void OnWorldsRequested() => PublishWorlds(force: true);
+
     private static void Tick()
     {
+        PublishWorlds();
+
         Build(out var buckets, out var occupants);
 
         if (buckets == _lastBuckets && occupants == _lastOccupants)
@@ -130,5 +142,79 @@ public static class BucketBroadcast
         }
 
         API.EmitClient(serverId, BucketEvents.State, viewerBucket, buckets, occupants);
+    }
+
+    private static void PublishWorlds(bool force = false)
+    {
+        var json = BuildWorldsJson();
+
+        if (!force && json == _lastWorldsJson)
+        {
+            return;
+        }
+
+        _lastWorldsJson = json;
+
+        API.EmitLocal(BucketEvents.ServerState, json);
+    }
+
+    private static string BuildWorldsJson()
+    {
+        var builder = new StringBuilder("{\"buckets\":[");
+        var first = true;
+
+        foreach (var definition in BucketRegistry.All())
+        {
+            if (!first)
+            {
+                builder.Append(',');
+            }
+
+            first = false;
+
+            var name = definition.Name.Length > 0
+                ? definition.Name
+                : "World " + definition.Id.ToString(CultureInfo.InvariantCulture);
+
+            builder.Append("{\"id\":").Append(definition.Id.ToString(CultureInfo.InvariantCulture))
+                .Append(",\"name\":\"").Append(JsonEscape(name)).Append('"')
+                .Append(",\"population\":").Append(definition.PopulationEnabled ? "true" : "false")
+                .Append(",\"lockdown\":\"").Append(JsonEscape(definition.LockdownMode)).Append("\"}");
+        }
+
+        builder.Append("]}");
+
+        return builder.ToString();
+    }
+
+    private static string JsonEscape(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+
+        foreach (var character in value)
+        {
+            switch (character)
+            {
+                case '"':
+                    builder.Append("\\\"");
+                    break;
+                case '\\':
+                    builder.Append("\\\\");
+                    break;
+                default:
+                    if (character < ' ')
+                    {
+                        builder.Append("\\u").Append(((int)character).ToString("x4", CultureInfo.InvariantCulture));
+                    }
+                    else
+                    {
+                        builder.Append(character);
+                    }
+
+                    break;
+            }
+        }
+
+        return builder.ToString();
     }
 }
