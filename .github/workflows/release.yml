@@ -52,7 +52,7 @@ jobs:
             echo "assembly=$ASSEMBLY"
             echo "file=$FILE"
             echo "tag=v$VERSION"
-            echo "zip=${RESOURCE}-v${VERSION}.zip"
+            echo "zip=${RESOURCE}.zip"
           } >> "$GITHUB_OUTPUT"
 
           echo "Version: $VERSION"
