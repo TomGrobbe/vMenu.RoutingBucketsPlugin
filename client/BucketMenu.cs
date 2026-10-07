@@ -114,7 +114,7 @@ public sealed class BucketMenu(
         root.AddSeparator(Text.Key("rb.section.you"));
 
         _current = root.AddButton(Text.Literal(string.Empty));
-        _current.Description = Text.Key("rb.current.desc");
+        _current.Description = Text.Key("rb.current.desc", ("id", Text.Literal(Id(_viewerBucket))));
         _current.Gate = ViewGate;
         _current.HideWhenLocked = true;
 
