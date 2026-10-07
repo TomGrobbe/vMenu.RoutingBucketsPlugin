@@ -76,9 +76,11 @@ public static class BucketRegistry
 
     public static int NextFreeId()
     {
+        var occupied = BucketOccupancy.Snapshot().Select(occupant => occupant.Bucket).ToHashSet();
+
         for (var id = BucketRules.DefaultBucket + 1; id <= BucketRules.MaxId; id++)
         {
-            if (!Buckets.ContainsKey(id))
+            if (!Buckets.ContainsKey(id) && !occupied.Contains(id))
             {
                 return id;
             }
