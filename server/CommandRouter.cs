@@ -244,7 +244,7 @@ public static class CommandRouter
             return BucketOutcome.Failed;
         }
 
-        if (id != BucketRules.DefaultBucket && !BucketRegistry.Exists(id))
+        if (!BucketOccupancy.IsReachable(id))
         {
             return BucketOutcome.UnknownBucket;
         }
@@ -352,7 +352,7 @@ public static class CommandRouter
             return BucketOutcome.Failed;
         }
 
-        if (id != BucketRules.DefaultBucket && !BucketRegistry.Exists(id))
+        if (!BucketOccupancy.IsReachable(id))
         {
             return BucketOutcome.UnknownBucket;
         }
@@ -399,7 +399,7 @@ public static class CommandRouter
             return BucketOutcome.Failed;
         }
 
-        if (bucket != BucketRules.DefaultBucket && !BucketRegistry.Exists(bucket))
+        if (!BucketOccupancy.IsReachable(bucket))
         {
             return BucketOutcome.UnknownBucket;
         }
@@ -435,7 +435,7 @@ public static class CommandRouter
             return BucketOutcome.Failed;
         }
 
-        if (bucket != BucketRules.DefaultBucket && !BucketRegistry.Exists(bucket))
+        if (!BucketOccupancy.IsReachable(bucket))
         {
             return BucketOutcome.UnknownBucket;
         }

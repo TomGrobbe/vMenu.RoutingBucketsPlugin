@@ -201,7 +201,7 @@ public static class ServerCommandRouter
             return BucketOutcome.Failed;
         }
 
-        if (world != BucketRules.DefaultBucket && !BucketRegistry.Exists(world))
+        if (!BucketOccupancy.IsReachable(world))
         {
             return BucketOutcome.UnknownBucket;
         }
@@ -225,7 +225,7 @@ public static class ServerCommandRouter
             return BucketOutcome.Failed;
         }
 
-        if (world != BucketRules.DefaultBucket && !BucketRegistry.Exists(world))
+        if (!BucketOccupancy.IsReachable(world))
         {
             return BucketOutcome.UnknownBucket;
         }
@@ -256,7 +256,7 @@ public static class ServerCommandRouter
             return BucketOutcome.Failed;
         }
 
-        if (world != BucketRules.DefaultBucket && !BucketRegistry.Exists(world))
+        if (!BucketOccupancy.IsReachable(world))
         {
             return BucketOutcome.UnknownBucket;
         }
@@ -315,7 +315,7 @@ public static class ServerCommandRouter
             return BucketOutcome.Failed;
         }
 
-        if (to != BucketRules.DefaultBucket && !BucketRegistry.Exists(to))
+        if (!BucketOccupancy.IsReachable(to))
         {
             return BucketOutcome.UnknownBucket;
         }

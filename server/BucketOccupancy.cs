@@ -81,6 +81,9 @@ public static class BucketOccupancy
         return moved;
     }
 
+    public static bool IsReachable(int bucket) =>
+        bucket == BucketRules.DefaultBucket || BucketRegistry.Exists(bucket) || (BucketRules.IsValidId(bucket) && CountIn(bucket) > 0);
+
     public static int BucketOf(int serverId) => Native.GetPlayerRoutingBucket(Handle(serverId));
 
     public static bool Move(int serverId, int bucket)
