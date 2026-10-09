@@ -42,11 +42,15 @@ public sealed class BucketMenu(
 
     private readonly Dictionary<int, WorldRows> _worlds = [];
 
+    private readonly List<int> _order = [];
+
     private PluginButton? _current;
 
     private PluginButton? _leave;
 
-    private List<int> _shape = [];
+    private PluginSeparator? _worldsHeader;
+
+    private PluginButton? _overflow;
 
     private int _viewerBucket;
 
@@ -65,50 +69,21 @@ public sealed class BucketMenu(
     {
         _viewerBucket = viewerBucket;
 
-        var shape = new List<int>(buckets.Count);
-
-        foreach (var bucket in buckets)
-        {
-            shape.Add(bucket.Id);
-        }
-
         using (_plugin.BeginBatch())
         {
-            if (!SameShape(shape))
+            if (_worldsHeader is null)
             {
-                _shape = shape;
-
-                Rebuild(buckets);
+                Build();
             }
+
+            SyncWorlds(buckets);
 
             Refresh(buckets, occupants);
         }
     }
 
-    private bool SameShape(List<int> shape)
+    private void Build()
     {
-        if (shape.Count != _shape.Count)
-        {
-            return false;
-        }
-
-        for (var index = 0; index < shape.Count; index++)
-        {
-            if (shape[index] != _shape[index])
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private void Rebuild(List<BucketRow> buckets)
-    {
-        _plugin.RootMenu.Clear();
-        _worlds.Clear();
-
-        var budget = RowBudget;
         var root = _plugin.RootMenu;
 
         root.AddSeparator(Text.Key("rb.section.you"));
@@ -124,33 +99,13 @@ public sealed class BucketMenu(
         _leave.HideWhenLocked = true;
         _leave.Selected += () => BucketClient.Send(BucketCommands.Leave);
 
-        root.AddSeparator(Text.Key("rb.section.worlds"));
+        _worldsHeader = root.AddSeparator(Text.Key("rb.section.worlds"));
 
-        var skipped = 0;
-
-        foreach (var bucket in buckets)
-        {
-            var cost = 11 + Math.Min(bucket.Occupants, MaxOccupantRows);
-
-            if (budget - cost < 0)
-            {
-                skipped++;
-
-                continue;
-            }
-
-            budget -= cost;
-
-            _worlds[bucket.Id] = BuildWorld(bucket);
-        }
-
-        if (skipped > 0)
-        {
-            var note = root.AddButton(Text.Literal($"{skipped} more world(s) not shown"));
-            note.Description = Text.Literal(
-                "There are more worlds than this menu can hold. Lower MaxWorlds or delete some.");
-            note.Enabled = false;
-        }
+        _overflow = root.AddButton(Text.Literal(string.Empty));
+        _overflow.Description = Text.Literal(
+            "There are more worlds than this menu can hold. Lower MaxWorlds or delete some.");
+        _overflow.Enabled = false;
+        _overflow.Visible = false;
 
         BuildTools(root);
 
@@ -290,6 +245,102 @@ public sealed class BucketMenu(
         _nearbyDestination?.SetOptions(options, Math.Clamp(_nearbyDestination.SelectedIndex, 0, clamped));
     }
 
+    private void SyncWorlds(List<BucketRow> buckets)
+    {
+        var shown = new List<BucketRow>(buckets.Count);
+        var budget = RowBudget;
+        var skipped = 0;
+
+        foreach (var bucket in buckets)
+        {
+            var cost = 11 + Math.Min(bucket.Occupants, MaxOccupantRows);
+
+            if (budget - cost < 0)
+            {
+                skipped++;
+
+                continue;
+            }
+
+            budget -= cost;
+
+            shown.Add(bucket);
+        }
+
+        var root = _plugin.RootMenu;
+
+        for (var index = _order.Count - 1; index >= 0; index--)
+        {
+            var id = _order[index];
+
+            if (shown.Exists(bucket => bucket.Id == id))
+            {
+                continue;
+            }
+
+            root.Remove(_worlds[id].Link!);
+
+            _worlds.Remove(id);
+            _order.RemoveAt(index);
+        }
+
+        var start = IndexOf(root, _worldsHeader!) + 1;
+
+        for (var index = 0; index < shown.Count; index++)
+        {
+            var bucket = shown[index];
+
+            if (_worlds.TryGetValue(bucket.Id, out var rows))
+            {
+                if (_order[index] != bucket.Id)
+                {
+                    root.Move(rows.Link!, start + index);
+
+                    _order.RemoveAt(OrderIndex(bucket.Id));
+                    _order.Insert(index, bucket.Id);
+                }
+
+                continue;
+            }
+
+            using (root.InsertAt(start + index))
+            {
+                _worlds[bucket.Id] = BuildWorld(bucket);
+            }
+
+            _order.Insert(index, bucket.Id);
+        }
+
+        _overflow!.Text = Text.Literal($"{skipped} more world(s) not shown");
+        _overflow.Visible = skipped > 0;
+    }
+
+    private int OrderIndex(int id)
+    {
+        for (var index = 0; index < _order.Count; index++)
+        {
+            if (_order[index] == id)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int IndexOf(PluginMenu menu, PluginItem item)
+    {
+        for (var index = 0; index < menu.Items.Count; index++)
+        {
+            if (ReferenceEquals(menu.Items[index], item))
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
     private WorldRows BuildWorld(BucketRow bucket)
     {
         var id = bucket.Id;
@@ -299,9 +350,6 @@ public sealed class BucketMenu(
                 Text.Literal(bucket.Name),
                 subtitle: Text.Key("rb.world.subtitle", ("id", Text.Literal(Id(id)))))
         };
-        rows.Link.Description = bucket.IsManaged
-            ? Text.Key("rb.world.desc", ("id", Text.Literal(Id(id))))
-            : Text.Key("rb.world.unmanaged.desc", ("id", Text.Literal(Id(id))));
         rows.Link.Gate = ViewGate;
         rows.Link.HideWhenLocked = true;
 
@@ -323,7 +371,6 @@ public sealed class BucketMenu(
         rows.Population.Description = Text.Key("rb.population.desc");
         rows.Population.Gate = WorldGate;
         rows.Population.HideWhenLocked = true;
-        rows.Population.Visible = bucket.IsManaged;
         rows.Population.Changed += checkedNow =>
             BucketClient.Send(BucketCommands.Population, Id(id), checkedNow ? "1" : "0");
 
@@ -334,7 +381,6 @@ public sealed class BucketMenu(
         rows.Lockdown.Description = Text.Key("rb.lockdown.desc");
         rows.Lockdown.Gate = WorldGate;
         rows.Lockdown.HideWhenLocked = true;
-        rows.Lockdown.Visible = bucket.IsManaged;
 
         rows.Lockdown.Selected += index =>
             BucketClient.Send(BucketCommands.Lockdown, Id(id), BucketRules.LockdownFromIndex(index));
@@ -343,7 +389,6 @@ public sealed class BucketMenu(
         rows.Reset.Description = Text.Key("rb.reset.desc");
         rows.Reset.Gate = WorldGate;
         rows.Reset.HideWhenLocked = true;
-        rows.Reset.Visible = bucket.IsManaged;
         rows.Reset.Selected += () =>
         {
             BucketClient.Send(BucketCommands.Population, Id(id), "1");
@@ -362,14 +407,12 @@ public sealed class BucketMenu(
         rows.Rename.Description = Text.Key("rb.rename.desc");
         rows.Rename.Gate = ManageGate;
         rows.Rename.HideWhenLocked = true;
-        rows.Rename.Visible = bucket.IsManaged && id != BucketRules.DefaultBucket;
         rows.Rename.Selected += () => _ = RenameAsync(id);
 
         rows.Delete = menu.AddConfirmButton(Text.Key("rb.delete"));
         rows.Delete.ConfirmationDescription = Text.Key("rb.delete.confirm");
         rows.Delete.Gate = ManageGate;
         rows.Delete.HideWhenLocked = true;
-        rows.Delete.Visible = bucket.IsManaged && id != BucketRules.DefaultBucket;
         rows.Delete.Confirmed += () =>
         {
             BucketClient.Send(BucketCommands.Delete, Id(id));
@@ -409,19 +452,30 @@ public sealed class BucketMenu(
                 continue;
             }
 
+            var id = Text.Literal(Id(bucket.Id));
+
             rows.Link!.Text = NameOf(bucket);
             rows.Link.Label = Headcount(bucket.Occupants);
             rows.Link.Menu.Title = NameOf(bucket);
+            rows.Link.Description = bucket.IsManaged
+                ? Text.Key("rb.world.desc", ("id", id))
+                : Text.Key("rb.world.unmanaged.desc", ("id", id));
+
+            rows.Population!.Visible = bucket.IsManaged;
+            rows.Lockdown!.Visible = bucket.IsManaged;
+            rows.Reset!.Visible = bucket.IsManaged;
+            rows.Rename!.Visible = bucket.IsManaged && bucket.Id != BucketRules.DefaultBucket;
+            rows.Delete!.Visible = bucket.IsManaged && bucket.Id != BucketRules.DefaultBucket;
 
             rows.Goto!.Enabled = bucket.Id != _viewerBucket;
             rows.Goto.Description = bucket.Id == _viewerBucket ? Text.Key("rb.goto.here") : Text.Key("rb.goto.desc");
 
-            rows.Population!.Checked = bucket.PopulationEnabled;
-            rows.Lockdown!.SelectedIndex = bucket.Lockdown;
+            rows.Population.Checked = bucket.PopulationEnabled;
+            rows.Lockdown.SelectedIndex = bucket.Lockdown;
 
             rows.Evict!.Enabled = bucket.Occupants > 0;
 
-            rows.Delete!.Enabled = bucket.Occupants == 0;
+            rows.Delete.Enabled = bucket.Occupants == 0;
             rows.Delete.Description = bucket.Occupants == 0
                 ? Text.Key("rb.delete.desc")
                 : Text.Key("rb.delete.occupied");
@@ -446,38 +500,49 @@ public sealed class BucketMenu(
 
     private static void FillOccupants(WorldRows rows, List<OccupantRow> occupants)
     {
-        var menu = rows.Occupants!.Menu;
-
-        menu.Clear();
-
-        if (occupants.Count == 0)
-        {
-            var empty = menu.AddButton(Text.Key("rb.occupants.none"));
-            empty.Enabled = false;
-
-            return;
-        }
-
-        var shown = 0;
+        var lines = new List<Text>();
 
         foreach (var occupant in occupants)
         {
-            if (shown >= MaxOccupantRows)
+            if (lines.Count >= MaxOccupantRows)
             {
-                var more = menu.AddButton(Text.Literal($"and {occupants.Count - shown} more"));
-                more.Enabled = false;
+                lines.Add(Text.Literal($"and {occupants.Count - MaxOccupantRows} more"));
 
                 break;
             }
 
-            var row = menu.AddButton(Text.Key(
+            lines.Add(Text.Key(
                 "rb.occupant",
                 ("name", Text.Literal(occupant.Name)),
                 ("id", Text.Literal(Id(occupant.ServerId)))));
+        }
 
-            row.Enabled = false;
+        if (lines.Count == 0)
+        {
+            lines.Add(Text.Key("rb.occupants.none"));
+        }
 
-            shown++;
+        var menu = rows.Occupants!.Menu;
+
+        for (var index = 0; index < lines.Count; index++)
+        {
+            if (index < rows.OccupantLines.Count)
+            {
+                rows.OccupantLines[index].Text = lines[index];
+
+                continue;
+            }
+
+            var line = menu.AddButton(lines[index]);
+            line.Enabled = false;
+
+            rows.OccupantLines.Add(line);
+        }
+
+        for (var index = rows.OccupantLines.Count - 1; index >= lines.Count; index--)
+        {
+            menu.Remove(rows.OccupantLines[index]);
+            rows.OccupantLines.RemoveAt(index);
         }
     }
 
@@ -539,5 +604,7 @@ public sealed class BucketMenu(
         public PluginButton? Rename { get; set; }
 
         public PluginConfirmButton? Delete { get; set; }
+
+        public List<PluginButton> OccupantLines { get; } = [];
     }
 }

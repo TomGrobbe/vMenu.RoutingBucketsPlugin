@@ -56,8 +56,6 @@ public sealed class Main : IScript
 
         plugin.RootMenu.Opened += BucketClient.RequestState;
 
-        plugin.RegistrationAnswered += _ => BucketClient.RequestState();
-
         var result = await plugin.ConnectAsync();
 
         API.Log.Debug($"[RoutingBuckets] Registered with vMenu: {result.Accepted}.");
@@ -67,8 +65,16 @@ public sealed class Main : IScript
 
     private void OnState(int viewerBucket, List<BucketRow> buckets, List<OccupantRow> occupants)
     {
-        _menu?.Apply(viewerBucket, buckets, occupants);
-        _actions?.SetWorlds(buckets);
+        if (_plugin is not { } plugin)
+        {
+            return;
+        }
+
+        using (plugin.BeginBatch())
+        {
+            _menu?.Apply(viewerBucket, buckets, occupants);
+            _actions?.SetWorlds(buckets);
+        }
     }
 
     private void OnMoved(string fromName, string toName, string actor)
