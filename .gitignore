@@ -1,11 +1,9 @@
 # Build output. The resource is produced here, it is never checked in.
 build/
 
-# Standard .NET leftovers.
-bin/
-obj/
+node_modules/
 
-# Visual Studio and Rider.
+# Editors.
 .vs/
 .idea/
-*.user
+.vscode/
