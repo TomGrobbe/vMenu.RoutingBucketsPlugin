@@ -50,6 +50,25 @@ add_ace builtin.everyone "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.View
 add_ace group.admin "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.World" allow
 ```
 
+## Building it yourself
+
+You only need this if you want to change the plugin. Everyone else can grab the zip from the releases
+page.
+
+The plugin is written in TypeScript, which is JavaScript with types added on top so mistakes are caught
+before the code ever runs. Your server cannot run TypeScript directly, so a build step turns it into two
+plain JavaScript files, one for the players' game (`client.js`) and one for the server (`server.js`).
+
+1. Install [Node.js](https://nodejs.org/) version 22 or newer. This is the program that runs the build.
+2. Open a terminal in this folder and run `npm ci`. That downloads the tools the build needs, including
+   vMenu's plugin library, into a `node_modules` folder.
+3. Run `npm run build`. It checks the code for mistakes first, and when everything is fine it writes the
+   finished resource to `build/vMenu.RoutingBucketsPlugin/`.
+4. Copy that folder into your server's resources, exactly like the zip from the releases page.
+
+The code lives in `src/`. Anything in `src/client` runs in the game of each player, anything in
+`src/server` runs on the server, and `src/shared` holds the bits both of them use.
+
 ## License
 
 GPL-3.0-or-later, the same as vMenu. See `LICENSE.md`.
