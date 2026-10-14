@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -10,8 +10,16 @@ const root = dirname(fileURLToPath(import.meta.url));
 const out = join(root, 'build', resourceName);
 const version = process.env.VERSION || JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 
-// The folder is never wiped, because a test server pointed at it keeps its saved buckets.json in there.
+// A test server pointed at this folder saves its worlds in buckets.json, so that survives the clean out.
+const savedWorlds = join(out, 'buckets.json');
+const worlds = existsSync(savedWorlds) ? readFileSync(savedWorlds) : undefined;
+
+rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
+
+if (worlds) {
+  writeFileSync(savedWorlds, worlds);
+}
 
 // FiveM loads plain scripts, not modules, so each side becomes one self contained file.
 const shared = { bundle: true, format: 'iife', target: 'es2020', logLevel: 'warning' };
