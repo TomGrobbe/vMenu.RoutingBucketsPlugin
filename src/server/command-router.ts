@@ -2,11 +2,11 @@ import { VMenuServer } from '@vespura/vmenu-plugin/server';
 import { BucketCommands, BucketOutcome, ResultDetails } from '../shared/commands';
 import { BucketEvents } from '../shared/events';
 import { Permissions } from '../shared/names';
-import { DefaultBucket, isValidId, isValidRadius } from '../shared/rules';
-import { pushNow, pushTo } from './broadcast';
+import { DefaultBucket, isValidId, isValidRadius, LockdownInactive } from '../shared/rules';
+import { pushNow, requestPush } from './broadcast';
 import { log } from './log';
-import { bucketOf, handle, isReachable, move, placements, playerExists, playerName } from './occupancy';
-import { moveAndTell, tell } from './moves';
+import { bucketOf, handle, isReachable, placements, playerExists, playerName } from './occupancy';
+import { moveAndTell } from './moves';
 import { createRateLimit } from './rate-limit';
 import { displayName } from './registry';
 import { allowsSelfJoin, isEnabled } from './settings';
@@ -22,7 +22,6 @@ type Handler = (source: number, args: string[]) => Handled;
 const Integer = /^\s*[+-]?\d+\s*$/;
 
 const commandLimit = createRateLimit(15, 10000);
-const stateLimit = createRateLimit(10, 10000);
 
 const handlers = new Map<string, Handler>([
   [BucketCommands.Create, create],
@@ -33,6 +32,7 @@ const handlers = new Map<string, Handler>([
   [BucketCommands.Leave, leave],
   [BucketCommands.Population, population],
   [BucketCommands.Lockdown, lockdown],
+  [BucketCommands.Reset, reset],
   [BucketCommands.Bring, bring],
   [BucketCommands.Send, send],
   [BucketCommands.Goto, goto],
@@ -44,8 +44,8 @@ export function registerCommandRouter(): void {
   onNet(BucketEvents.RequestState, () => {
     const player = source;
 
-    if (isEnabled() && stateLimit(player) && allowed(player, Permissions.View)) {
-      pushTo(player);
+    if (isEnabled() && allowed(player, Permissions.View)) {
+      requestPush(player);
     }
   });
 
@@ -145,7 +145,7 @@ function join(source: number, args: string[]): Handled {
 
   moveAndTell(source, id, '');
 
-  log.debug(`${playerName(source)} moved themselves into world ${id}.`);
+  log.debug(() => `${playerName(source)} moved themselves into world ${id}.`);
 
   return { outcome: BucketOutcome.Ok };
 }
@@ -157,7 +157,7 @@ function leave(source: number): Handled {
 
   moveAndTell(source, DefaultBucket, '');
 
-  log.debug(`${playerName(source)} moved themselves back to the main world.`);
+  log.debug(() => `${playerName(source)} moved themselves back to the main world.`);
 
   return { outcome: BucketOutcome.Ok };
 }
@@ -191,6 +191,20 @@ function lockdown(source: number, args: string[]): Handled {
   return { outcome: changeWorld(id, { lockdown: args[1] }, playerName(source)) };
 }
 
+function reset(source: number, args: string[]): Handled {
+  if (!allowed(source, Permissions.World)) {
+    return { outcome: BucketOutcome.Denied };
+  }
+
+  const id = readId(args, 0);
+
+  if (id === undefined) {
+    return { outcome: BucketOutcome.Failed };
+  }
+
+  return { outcome: changeWorld(id, { population: true, lockdown: LockdownInactive }, playerName(source)) };
+}
+
 function bring(source: number, args: string[]): Handled {
   if (!allowed(source, Permissions.Move)) {
     return { outcome: BucketOutcome.Denied };
@@ -206,7 +220,7 @@ function bring(source: number, args: string[]): Handled {
 
   moveAndTell(target, bucket, playerName(source));
 
-  log.debug(`${playerName(source)} brought ${playerName(target)} into world ${bucket}.`);
+  log.debug(() => `${playerName(source)} brought ${playerName(target)} into world ${bucket}.`);
 
   return { outcome: BucketOutcome.Ok };
 }
@@ -234,7 +248,7 @@ function send(source: number, args: string[]): Handled {
 
   moveAndTell(target, id, playerName(source));
 
-  log.debug(`${playerName(source)} sent ${playerName(target)} to world ${id}.`);
+  log.debug(() => `${playerName(source)} sent ${playerName(target)} to world ${id}.`);
 
   return { outcome: BucketOutcome.Ok };
 }
@@ -254,7 +268,7 @@ function goto(source: number, args: string[]): Handled {
 
   moveAndTell(source, bucket, '');
 
-  log.debug(`${playerName(source)} moved themselves into world ${bucket}.`);
+  log.debug(() => `${playerName(source)} moved themselves into world ${bucket}.`);
 
   return { outcome: BucketOutcome.Ok };
 }
@@ -281,9 +295,13 @@ function moveEntity(source: number, args: string[]): Handled {
     return { outcome: BucketOutcome.UnknownEntity };
   }
 
+  if (IsPedAPlayer(entity)) {
+    return { outcome: BucketOutcome.Failed };
+  }
+
   SetEntityRoutingBucket(entity, bucket);
 
-  log.debug(`${playerName(source)} moved entity ${entity} to world ${bucket}.`);
+  log.debug(() => `${playerName(source)} moved entity ${entity} to world ${bucket}.`);
 
   return { outcome: BucketOutcome.Ok, detail: [ResultDetails.MovedEntity, displayName(bucket)] };
 }
@@ -313,12 +331,12 @@ function moveNearby(source: number, args: string[]): Handled {
   const includeSelf = args[2] === '1';
   const actor = playerName(source);
   const centre = GetEntityCoords(ped);
-  let moved = 0;
+  const moved = new Set<number>();
 
   for (const placement of placements()) {
     const isSelf = placement.serverId === source;
 
-    if ((isSelf && !includeSelf) || placement.bucket === bucket) {
+    if ((isSelf && !includeSelf) || placement.bucket === bucket || moved.has(placement.serverId)) {
       continue;
     }
 
@@ -328,18 +346,14 @@ function moveNearby(source: number, args: string[]): Handled {
       continue;
     }
 
-    if (!move(placement.serverId, bucket)) {
-      continue;
+    for (const serverId of moveAndTell(placement.serverId, bucket, isSelf ? '' : actor)) {
+      moved.add(serverId);
     }
-
-    tell(placement.serverId, placement.bucket, bucket, isSelf ? '' : actor);
-
-    moved++;
   }
 
-  log.debug(`${actor} moved ${moved} player(s) within ${radius}m to world ${bucket}.`);
+  log.debug(() => `${actor} moved ${moved.size} player(s) within ${radius}m to world ${bucket}.`);
 
-  return { outcome: BucketOutcome.Ok, detail: [ResultDetails.MovedNearby, String(moved), displayName(bucket)] };
+  return { outcome: BucketOutcome.Ok, detail: [ResultDetails.MovedNearby, String(moved.size), displayName(bucket)] };
 }
 
 function allowed(source: number, permission: string): boolean {

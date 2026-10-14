@@ -3,10 +3,10 @@ import { BucketEvents } from '../shared/events';
 import { cleanText, isValidId } from '../shared/rules';
 import { pushNow } from './broadcast';
 import { log } from './log';
-import { isReachable, moveAllTo, placements, playerExists } from './occupancy';
-import { moveAndTell, tell } from './moves';
+import { isReachable, placements, playerExists } from './occupancy';
+import { moveAndTell } from './moves';
 import { isEnabled } from './settings';
-import { changeWorld, createWorld, deleteWorld, emptyWorld, renameWorld, who } from './worlds';
+import { changeWorld, createWorld, deleteWorld, emptyWorld, renameWorld, transferWorld, who } from './worlds';
 
 type Params = Record<string, unknown>;
 
@@ -102,7 +102,7 @@ function moveOne(p: Params): Handled {
 
   moveAndTell(serverId, world, operator(p));
 
-  log.debug(`${who(operator(p))} moved player ${serverId} to world ${world}.`);
+  log.debug(() => `${who(operator(p))} moved player ${serverId} to world ${world}.`);
 
   return { outcome: BucketOutcome.Ok };
 }
@@ -119,9 +119,9 @@ function moveAll(p: Params): Handled {
   }
 
   const others = placements().filter((placement) => placement.bucket !== world);
-  const moved = others.filter((placement) => moveAndTell(placement.serverId, world, operator(p))).length;
+  const moved = others.filter((placement) => moveAndTell(placement.serverId, world, operator(p)).length > 0).length;
 
-  log.debug(`${who(operator(p))} moved ${moved} player(s) to world ${world}.`);
+  log.debug(() => `${who(operator(p))} moved ${moved} player(s) to world ${world}.`);
 
   return { outcome: BucketOutcome.Ok };
 }
@@ -138,9 +138,11 @@ function moveIds(p: Params): Handled {
     return { outcome: BucketOutcome.UnknownBucket };
   }
 
-  const moved = ids.filter((serverId) => isInt32(serverId) && moveAndTell(serverId, world, operator(p))).length;
+  const moved = ids.filter(
+    (serverId) => isInt32(serverId) && moveAndTell(serverId, world, operator(p)).length > 0,
+  ).length;
 
-  log.debug(`${who(operator(p))} moved ${moved} listed player(s) to world ${world}.`);
+  log.debug(() => `${who(operator(p))} moved ${moved} listed player(s) to world ${world}.`);
 
   return { outcome: BucketOutcome.Ok };
 }
@@ -155,23 +157,9 @@ function transfer(p: Params): Handled {
   const from = readId(p, 'from');
   const to = readId(p, 'to');
 
-  if (from === undefined || to === undefined) {
-    return { outcome: BucketOutcome.Failed };
-  }
-
-  if (!isReachable(to)) {
-    return { outcome: BucketOutcome.UnknownBucket };
-  }
-
-  const moved = moveAllTo(from, to);
-
-  for (const serverId of moved) {
-    tell(serverId, from, to, operator(p));
-  }
-
-  log.debug(`${who(operator(p))} transferred ${moved.length} player(s) from world ${from} to ${to}.`);
-
-  return { outcome: BucketOutcome.Ok };
+  return {
+    outcome: from === undefined || to === undefined ? BucketOutcome.Failed : transferWorld(from, to, operator(p)),
+  };
 }
 
 function parse(json: unknown): Params | undefined {

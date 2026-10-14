@@ -42,17 +42,24 @@ export function countIn(bucketId: number): number {
   return placements().filter((placement) => placement.bucket === bucketId).length;
 }
 
-export function moveAllTo(fromBucket: number, toBucket: number): number[] {
-  const moved: number[] = [];
+export interface Moved {
+  serverId: number;
+  from: number;
+}
+
+export function moveAllTo(fromBucket: number, toBucket: number): Moved[] {
+  const moved: Moved[] = [];
+  const done = new Set<number>();
 
   for (const placement of placements()) {
-    if (placement.bucket !== fromBucket) {
+    if (placement.bucket !== fromBucket || done.has(placement.serverId)) {
       continue;
     }
 
-    SetPlayerRoutingBucket(handle(placement.serverId), toBucket);
-    takeVehicleAlong(placement.serverId, toBucket);
-    moved.push(placement.serverId);
+    for (const entry of move(placement.serverId, toBucket)) {
+      done.add(entry.serverId);
+      moved.push(entry);
+    }
   }
 
   return moved;
@@ -70,36 +77,51 @@ export function playerExists(serverId: number): boolean {
   return DoesPlayerExist(handle(serverId));
 }
 
-export function move(serverId: number, bucket: number): boolean {
+export function move(serverId: number, bucket: number): Moved[] {
   if (!isValidId(bucket) || !playerExists(serverId)) {
-    return false;
+    return [];
   }
 
-  SetPlayerRoutingBucket(handle(serverId), bucket);
+  const vehicle = drivenVehicle(serverId);
+  const riders = vehicle === 0 ? [] : ridersOf(vehicle, serverId);
+  const moved = [{ serverId, from: bucketOf(serverId) }, ...riders];
 
-  takeVehicleAlong(serverId, bucket);
+  for (const entry of moved) {
+    SetPlayerRoutingBucket(handle(entry.serverId), bucket);
+  }
 
-  return true;
+  if (vehicle !== 0) {
+    SetEntityRoutingBucket(vehicle, bucket);
+  }
+
+  return moved;
 }
 
-function takeVehicleAlong(serverId: number, bucket: number): void {
+function drivenVehicle(serverId: number): number {
   const ped = GetPlayerPed(handle(serverId));
 
   if (ped === 0 || !DoesEntityExist(ped)) {
-    return;
+    return 0;
   }
 
   const vehicle = GetVehiclePedIsIn(ped, false);
 
-  if (vehicle === 0 || !DoesEntityExist(vehicle)) {
-    return;
+  if (vehicle === 0 || !DoesEntityExist(vehicle) || GetPedInVehicleSeat(vehicle, DriverSeat) !== ped) {
+    return 0;
   }
 
-  if (GetPedInVehicleSeat(vehicle, DriverSeat) !== ped) {
-    return;
-  }
+  return vehicle;
+}
 
-  SetEntityRoutingBucket(vehicle, bucket);
+function ridersOf(vehicle: number, driver: number): Moved[] {
+  return placements()
+    .filter((placement) => placement.serverId !== driver)
+    .filter((placement) => {
+      const ped = GetPlayerPed(handle(placement.serverId));
+
+      return ped !== 0 && GetVehiclePedIsIn(ped, false) === vehicle;
+    })
+    .map((placement) => ({ serverId: placement.serverId, from: placement.bucket }));
 }
 
 export function handle(serverId: number): string {

@@ -10,6 +10,7 @@ export interface BucketDefinition {
 }
 
 const FileName = 'buckets.json';
+const Bom = /^\uFEFF/;
 
 export function loadDefinitions(): BucketDefinition[] {
   const contents = LoadResourceFile(GetCurrentResourceName(), FileName);
@@ -19,10 +20,14 @@ export function loadDefinitions(): BucketDefinition[] {
   }
 
   try {
-    const file = lowerKeys(JSON.parse(stripCommentsAndTrailingCommas(contents)));
-    const buckets = file?.['buckets'];
+    const file = lowerKeys(JSON.parse(stripCommentsAndTrailingCommas(contents.replace(Bom, ''))), 'the file');
+    const buckets = file['buckets'] ?? [];
 
-    return Array.isArray(buckets) ? buckets.map(lowerKeys).flatMap(readDefinition) : [];
+    if (!Array.isArray(buckets)) {
+      throw new Error('"buckets" is not a list');
+    }
+
+    return buckets.map((raw, index) => readDefinition(lowerKeys(raw, `bucket ${index + 1}`), index + 1));
   } catch (error) {
     log.error(
       `${FileName} did not read (${(error as Error).message}). Starting with no saved worlds. The next ` +
@@ -58,6 +63,7 @@ export function saveDefinitions(buckets: readonly BucketDefinition[]): boolean {
 function stripCommentsAndTrailingCommas(json: string): string {
   let out = '';
   let index = 0;
+  let openComma = -1;
 
   while (index < json.length) {
     const character = json[index]!;
@@ -68,19 +74,32 @@ function stripCommentsAndTrailingCommas(json: string): string {
 
       out += json.slice(index, end);
       index = end;
+      openComma = -1;
     } else if (character === '/' && next === '/') {
-      index = json.indexOf('\n', index);
-      index = index < 0 ? json.length : index;
+      const end = json.indexOf('\n', index);
+
+      index = end < 0 ? json.length : end;
     } else if (character === '/' && next === '*') {
-      index = json.indexOf('*/', index + 2);
-      index = index < 0 ? json.length : index + 2;
+      const end = json.indexOf('*/', index + 2);
+
+      index = end < 0 ? json.length : end + 2;
     } else {
+      if ((character === '}' || character === ']') && openComma >= 0) {
+        out = out.slice(0, openComma) + out.slice(openComma + 1);
+      }
+
+      if (character === ',') {
+        openComma = out.length;
+      } else if (!/\s/.test(character)) {
+        openComma = -1;
+      }
+
       out += character;
       index++;
     }
   }
 
-  return out.replace(/,(\s*[}\]])|"(?:[^"\\]|\\.)*"/g, (match, closer?: string) => closer ?? match);
+  return out;
 }
 
 function endOfString(json: string, start: number): number {
@@ -94,29 +113,33 @@ function endOfString(json: string, start: number): number {
 }
 
 // The C# version of this plugin read the file case-insensitively, so hand edited files may use any casing.
-function lowerKeys(value: unknown): Record<string, unknown> | undefined {
+function lowerKeys(value: unknown, what: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return undefined;
+    throw new Error(`${what} is not an object`);
   }
 
   return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key.toLowerCase(), inner]));
 }
 
-function readDefinition(raw: Record<string, unknown> | undefined): BucketDefinition[] {
-  if (raw === undefined || typeof raw['id'] !== 'number') {
-    return [];
+function readDefinition(raw: Record<string, unknown>, position: number): BucketDefinition {
+  const { id, name = '', populationenabled = true, lockdownmode = LockdownInactive } = raw;
+
+  if (typeof id !== 'number' || !Number.isInteger(id)) {
+    throw new Error(`bucket ${position} has no whole number "id"`);
   }
 
-  const name = raw['name'];
-  const population = raw['populationenabled'];
-  const lockdown = raw['lockdownmode'];
+  if (
+    (name !== null && typeof name !== 'string') ||
+    typeof populationenabled !== 'boolean' ||
+    typeof lockdownmode !== 'string'
+  ) {
+    throw new Error(`bucket ${position} has a "name", "populationEnabled" or "lockdownMode" of the wrong type`);
+  }
 
-  return [
-    {
-      id: raw['id'],
-      name: typeof name === 'string' ? cleanText(name) : '',
-      populationEnabled: typeof population === 'boolean' ? population : true,
-      lockdownMode: isValidLockdown(lockdown) ? lockdown : LockdownInactive,
-    },
-  ];
+  return {
+    id,
+    name: cleanText(name ?? ''),
+    populationEnabled: populationenabled,
+    lockdownMode: isValidLockdown(lockdownmode) ? lockdownmode : LockdownInactive,
+  };
 }

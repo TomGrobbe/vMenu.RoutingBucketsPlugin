@@ -3,9 +3,9 @@ import { logsDebug } from './settings';
 const Prefix = '[RoutingBuckets]';
 
 export const log = {
-  debug: (message: string) => {
+  debug: (message: () => string) => {
     if (logsDebug()) {
-      console.log(`${Prefix} ${message}`);
+      console.log(`${Prefix} ${message()}`);
     }
   },
   info: (message: string) => console.log(`${Prefix} ${message}`),

@@ -15,14 +15,7 @@ import {
 } from '@vespura/vmenu-plugin/client';
 import { BucketCommands } from '../shared/commands';
 import { Permissions } from '../shared/names';
-import {
-  DefaultBucket,
-  LockdownInactive,
-  lockdownFromIndex,
-  lockdownToIndex,
-  MaxNameLength,
-  Radii,
-} from '../shared/rules';
+import { DefaultBucket, lockdownFromIndex, lockdownToIndex, MaxNameLength, Radii } from '../shared/rules';
 import type { BucketRow, OccupantRow } from '../shared/state';
 import { sendCommand } from './bucket-client';
 import { clampIndex, worldName } from './names';
@@ -89,12 +82,10 @@ export class BucketMenu {
   apply(viewerBucket: number, buckets: readonly BucketRow[], occupants: readonly OccupantRow[]): void {
     this.viewerBucket = viewerBucket;
 
-    this.plugin.batch(() => {
-      const layout = (this.layout ??= this.build());
+    const layout = (this.layout ??= this.build());
 
-      this.syncWorlds(layout, buckets);
-      this.refresh(layout, buckets, occupants);
-    });
+    this.syncWorlds(layout, buckets);
+    this.refresh(layout, buckets, occupants);
   }
 
   cancelReopen(): void {
@@ -161,7 +152,7 @@ export class BucketMenu {
 
         this.plugin.notify(
           found ? NotifyStyle.Success : NotifyStyle.Warning,
-          Text.key(this.tools.hasSelection ? 'rb.entity.selected' : 'rb.entity.none'),
+          Text.key(found ? 'rb.entity.selected' : 'rb.entity.none'),
         );
       });
 
@@ -373,10 +364,7 @@ export class BucketMenu {
       gate: this.worldGate,
       hideWhenLocked: true,
     });
-    reset.onSelected(() => {
-      sendCommand(BucketCommands.Population, id, '1');
-      sendCommand(BucketCommands.Lockdown, id, LockdownInactive);
-    });
+    reset.onSelected(() => sendCommand(BucketCommands.Reset, id));
 
     const evict = menu.addConfirmButton(Text.key('rb.evict'), {
       description: Text.key('rb.evict.desc'),

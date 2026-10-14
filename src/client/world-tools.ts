@@ -42,7 +42,14 @@ export class WorldTools {
 
     const [, hit, , , entity] = GetShapeTestResult(probe);
 
-    if (!hit || entity === 0 || entity === ped || !DoesEntityExist(entity) || !NetworkGetEntityIsNetworked(entity)) {
+    if (
+      !hit ||
+      entity === 0 ||
+      entity === ped ||
+      !DoesEntityExist(entity) ||
+      !NetworkGetEntityIsNetworked(entity) ||
+      IsPedAPlayer(entity)
+    ) {
       return false;
     }
 

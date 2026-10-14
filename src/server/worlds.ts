@@ -1,8 +1,8 @@
 import { BucketOutcome } from '../shared/commands';
 import { DefaultBucket, isValidLockdown, normalizeName } from '../shared/rules';
 import { log } from './log';
-import { countIn, moveAllTo } from './occupancy';
-import { tell } from './moves';
+import { countIn, isReachable } from './occupancy';
+import { moveEveryone } from './moves';
 import {
   bucketCount,
   bucketExists,
@@ -39,7 +39,7 @@ export function createWorld(rawName: unknown, by: string): { outcome: BucketOutc
     return { outcome: BucketOutcome.TooManyBuckets };
   }
 
-  log.debug(`${who(by)} created world '${world.name}' (bucket ${world.id}).`);
+  log.debug(() => `${who(by)} created world '${world.name}' (bucket ${world.id}).`);
 
   return { outcome: saved(), world };
 }
@@ -65,7 +65,7 @@ export function renameWorld(id: number, rawName: unknown, by: string): { outcome
 
   renameBucket(id, name);
 
-  log.debug(`${who(by)} renamed world ${id} to '${name}'.`);
+  log.debug(() => `${who(by)} renamed world ${id} to '${name}'.`);
 
   return { outcome: saved(), name };
 }
@@ -85,7 +85,7 @@ export function deleteWorld(id: number, by: string): BucketOutcome {
 
   deleteBucket(id);
 
-  log.debug(`${who(by)} deleted world ${id}.`);
+  log.debug(() => `${who(by)} deleted world ${id}.`);
 
   return saved();
 }
@@ -112,7 +112,7 @@ export function changeWorld(id: number, changes: WorldChanges, by: string): Buck
     setLockdown(id, lockdown);
   }
 
-  log.debug(`${who(by)} changed world ${id}: ${JSON.stringify(changes)}.`);
+  log.debug(() => `${who(by)} changed world ${id}: ${JSON.stringify(changes)}.`);
 
   return saved();
 }
@@ -122,15 +122,23 @@ export function emptyWorld(id: number, by: string): { outcome: BucketOutcome; mo
     return { outcome: BucketOutcome.CannotModifyDefault, moved: 0 };
   }
 
-  const moved = moveAllTo(id, DefaultBucket);
+  const moved = moveEveryone(id, DefaultBucket, by);
 
-  for (const serverId of moved) {
-    tell(serverId, id, DefaultBucket, by);
+  log.debug(() => `${who(by)} moved ${moved} player(s) out of world ${id}.`);
+
+  return { outcome: BucketOutcome.Ok, moved };
+}
+
+export function transferWorld(from: number, to: number, by: string): BucketOutcome {
+  if (!isReachable(to)) {
+    return BucketOutcome.UnknownBucket;
   }
 
-  log.debug(`${who(by)} moved ${moved.length} player(s) out of world ${id}.`);
+  const moved = moveEveryone(from, to, by);
 
-  return { outcome: BucketOutcome.Ok, moved: moved.length };
+  log.debug(() => `${who(by)} transferred ${moved} player(s) from world ${from} to ${to}.`);
+
+  return BucketOutcome.Ok;
 }
 
 export function who(by: string): string {

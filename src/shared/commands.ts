@@ -6,6 +6,7 @@ export const BucketCommands = {
   Leave: 'leave',
   Population: 'population',
   Lockdown: 'lockdown',
+  Reset: 'reset',
   Evict: 'evict',
   Bring: 'bring',
   Send: 'send',

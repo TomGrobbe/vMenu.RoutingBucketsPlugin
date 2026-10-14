@@ -2,7 +2,7 @@ import { NotifyStyle, Text, VMenuPlugin } from '@vespura/vmenu-plugin/client';
 import { BucketOutcome, ResultDetails } from '../shared/commands';
 import { BucketEvents } from '../shared/events';
 import { SettingNames } from '../shared/names';
-import type { BucketRow, OccupantRow } from '../shared/state';
+import { unpackBucket, unpackOccupant, type PackedBucket, type PackedOccupant } from '../shared/state';
 import { requestState } from './bucket-client';
 import { BucketMenu } from './bucket-menu';
 import { PlayerActionRows } from './player-action-rows';
@@ -37,9 +37,11 @@ tools.start();
 const menu = new BucketMenu(plugin, enabled, allowSelfJoin, tools);
 const actions = new PlayerActionRows(plugin, enabled, allowSelfJoin);
 
-onNet(BucketEvents.State, (viewerBucket: number, buckets: BucketRow[], occupants: OccupantRow[]) => {
+onNet(BucketEvents.State, (viewerBucket: number, packedBuckets: PackedBucket[], packedOccupants: PackedOccupant[]) => {
+  const buckets = packedBuckets.map(unpackBucket);
+
   plugin.batch(() => {
-    menu.apply(viewerBucket, buckets, occupants);
+    menu.apply(viewerBucket, buckets, packedOccupants.map(unpackOccupant));
     actions.setWorlds(buckets);
   });
 });

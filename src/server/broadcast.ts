@@ -1,26 +1,30 @@
 import { VMenuServer } from '@vespura/vmenu-plugin/server';
 import { BucketEvents } from '../shared/events';
 import { Permissions } from '../shared/names';
-import type { BucketRow, OccupantRow } from '../shared/state';
+import { packBucket, packOccupant, type BucketRow, type PackedBucket, type PackedOccupant } from '../shared/state';
 import { bucketOf, handle, playerExists, snapshot, type Occupant } from './occupancy';
 import { allBuckets, bucketExists, displayName } from './registry';
 import { isEnabled } from './settings';
 import type { BucketDefinition } from './store';
 
 const TickMs = 2000;
+const RequestGapMs = 1000;
 
 interface State {
-  buckets: BucketRow[];
-  occupants: OccupantRow[];
+  buckets: PackedBucket[];
+  occupants: PackedOccupant[];
   everyone: Occupant[];
 }
 
 let lastState = '';
 let lastWorlds = '';
+const lastRequest = new Map<number, number>();
+const pendingRequests = new Set<number>();
 
 export function registerBroadcast(): void {
   on('playerDropped', () => {
     lastState = '';
+    lastRequest.delete(source);
   });
 
   on(BucketEvents.RequestServerState, () => publishWorlds(allBuckets(), true));
@@ -48,7 +52,33 @@ export function pushNow(): void {
   sendToEveryone(state);
 }
 
-export function pushTo(serverId: number): void {
+export function requestPush(serverId: number): void {
+  if (pendingRequests.has(serverId)) {
+    return;
+  }
+
+  const wait = (lastRequest.get(serverId) ?? 0) + RequestGapMs - Date.now();
+
+  if (wait <= 0) {
+    pushTo(serverId);
+
+    return;
+  }
+
+  pendingRequests.add(serverId);
+
+  setTimeout(() => {
+    pendingRequests.delete(serverId);
+
+    if (isEnabled() && playerExists(serverId)) {
+      pushTo(serverId);
+    }
+  }, wait);
+}
+
+function pushTo(serverId: number): void {
+  lastRequest.set(serverId, Date.now());
+
   sendTo(serverId, bucketOf(serverId), build(allBuckets()));
 }
 
@@ -98,13 +128,11 @@ function build(definitions: readonly BucketDefinition[]): State {
     }
   }
 
-  const occupants = everyone.map((occupant) => ({
-    bucketId: occupant.bucket,
-    serverId: occupant.serverId,
-    name: occupant.name,
-  }));
+  const occupants = everyone.map((occupant) =>
+    packOccupant({ bucketId: occupant.bucket, serverId: occupant.serverId, name: occupant.name }),
+  );
 
-  return { buckets, occupants, everyone };
+  return { buckets: buckets.map(packBucket), occupants, everyone };
 }
 
 function fingerprint(state: State): string {

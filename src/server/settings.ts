@@ -1,7 +1,8 @@
 import { SettingNames } from '../shared/names';
 import { isValidLockdown, LockdownInactive, type LockdownMode } from '../shared/rules';
 
-const Prefix = 'vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.';
+// Matches how vMenu names a plugin's convars, so a renamed resource folder still reads its own settings.
+const Prefix = `vMenu.Enhanced.Plugins.${GetCurrentResourceName().replace(/[^A-Za-z0-9]/g, '_')}.`;
 const MinWorldCap = 1;
 const MaxWorldCap = 512;
 
