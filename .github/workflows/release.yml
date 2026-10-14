@@ -14,7 +14,6 @@ permissions:
 
 env:
   RESOURCE: vMenu.RoutingBucketsPlugin
-  GITVERSION_VERSION: 6.8.2
 
 jobs:
   release:
@@ -23,95 +22,50 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - name: Install GitVersion
+        uses: gittools/actions/gitversion/setup@v4.7.0
         with:
-          global-json-file: global.json
+          versionSpec: '6.8.x'
 
       - name: Work out the version
         id: version
-        shell: bash
+        uses: gittools/actions/gitversion/execute@v4.7.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Build
+        env:
+          VERSION: ${{ steps.version.outputs.majorMinorPatch }}
         run: |
-          set -euo pipefail
+          npm ci
+          npm run build
 
-          dotnet tool install --global GitVersion.Tool --version "$GITVERSION_VERSION"
-          export PATH="$PATH:$HOME/.dotnet/tools"
-
-          dotnet-gitversion /output json | tee gitversion.json
-
-          VERSION=$(jq -er '.MajorMinorPatch' gitversion.json)
-          ASSEMBLY=$(jq -er '.AssemblySemVer' gitversion.json)
-          FILE=$(jq -er '.AssemblySemFileVer' gitversion.json)
-
-          {
-            echo "version=$VERSION"
-            echo "assembly=$ASSEMBLY"
-            echo "file=$FILE"
-            echo "tag=v$VERSION"
-            echo "zip=${RESOURCE}.zip"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Version: $VERSION"
-
-      - name: Stamp the manifest
+      - name: Check the manifest version
         shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.majorMinorPatch }}
         run: |
-          set -euo pipefail
-
-          VERSION="${{ steps.version.outputs.version }}"
-
-          sed -i "s/^version '[^']*'/version '$VERSION'/" fxmanifest.lua
-
-          grep -q "^version '$VERSION'" fxmanifest.lua || {
+          grep -q "^version '$VERSION'" "build/${RESOURCE}/fxmanifest.lua" || {
             echo "The version line in fxmanifest.lua was not replaced."
             exit 1
           }
-
-      - name: Build
-        shell: bash
-        run: |
-          dotnet build "${RESOURCE}.slnx" -c Release \
-            -p:Version="${{ steps.version.outputs.version }}" \
-            -p:AssemblyVersion="${{ steps.version.outputs.assembly }}" \
-            -p:FileVersion="${{ steps.version.outputs.file }}"
-
-      - name: Check the manifest lists every client assembly
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          CLIENT_DLL=$(grep -o "^client_script 'client/[A-Za-z0-9._]*\.dll'" fxmanifest.lua | grep -o "[A-Za-z0-9._]*\.dll")
-
-          if [ -z "$CLIENT_DLL" ]; then
-            echo "Could not read the client_script line from fxmanifest.lua."
-            exit 1
-          fi
-
-          sed -n '/^files {/,/^}/p' fxmanifest.lua \
-            | grep -o "client/[A-Za-z0-9._]*\.dll" | sed 's|client/||' | sort > declared.txt
-
-          ls "build/${RESOURCE}/client/"*.dll | xargs -n1 basename \
-            | grep -v "^${CLIENT_DLL}$" | sort > built.txt
-
-          if ! diff declared.txt built.txt; then
-            echo "fxmanifest.lua does not match what the build produced."
-            exit 1
-          fi
 
       - name: Package
         shell: bash
         run: |
           set -euo pipefail
 
-          cd build
-          zip -r "../${{ steps.version.outputs.zip }}" "$RESOURCE"
-          cd ..
+          (cd build && zip -q -r -X "../${RESOURCE}.zip" "$RESOURCE")
 
-          unzip -l "${{ steps.version.outputs.zip }}"
+          unzip -l "${RESOURCE}.zip"
 
       - name: Generate changelog
         shell: bash
@@ -131,13 +85,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.majorMinorPatch }}
         run: |
           set -euo pipefail
 
-          VMENU_VERSION=$(grep -o 'Include="vMenu.Enhanced.ClientAPI" Version="[^"]*"' Directory.Packages.props | grep -o 'Version="[^"]*"' | cut -d'"' -f2)
+          VMENU_VERSION=$(node -p "require('./package.json').dependencies['@vespura/vmenu-plugin']")
 
-          if [ -z "$VMENU_VERSION" ]; then
-            echo "Could not read the vMenu.Enhanced.ClientAPI version from Directory.Packages.props."
+          if [ -z "$VMENU_VERSION" ] || [ "$VMENU_VERSION" = "undefined" ]; then
+            echo "Could not read the @vespura/vmenu-plugin version from package.json."
             exit 1
           fi
 
@@ -149,9 +104,9 @@ jobs:
             cat changelog.txt
           } > release_notes.md
 
-          gh release create "${{ steps.version.outputs.tag }}" \
-            --title "vMenu Routing Buckets v${{ steps.version.outputs.version }}" \
+          gh release create "v$VERSION" \
+            --title "vMenu Routing Buckets v$VERSION" \
             --notes-file release_notes.md \
             --latest \
             --target "$GITHUB_SHA" \
-            "${{ steps.version.outputs.zip }}"
+            "${RESOURCE}.zip"
