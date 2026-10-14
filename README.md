@@ -50,6 +50,16 @@ add_ace builtin.everyone "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.View
 add_ace group.admin "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.World" allow
 ```
 
+## Seeing what happens
+
+By default the plugin keeps the server console quiet. If you want a line in the console every time
+somebody creates, changes or deletes a world, or moves a player between worlds, turn on the `Debug`
+setting in the configuration file:
+
+```ini
+setr vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.Debug true
+```
+
 ## Building it yourself
 
 You only need this if you want to change the plugin. Everyone else can grab the zip from the releases
