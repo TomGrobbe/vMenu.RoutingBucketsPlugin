@@ -1,4 +1,5 @@
 import { BucketOutcome } from '../shared/commands';
+import { isDensityKind, isValidStep, type Density } from '../shared/density';
 import { DefaultBucket, isValidLockdown, normalizeName } from '../shared/rules';
 import { log } from './log';
 import { countIn, isReachable } from './occupancy';
@@ -11,14 +12,14 @@ import {
   nameTaken,
   renameBucket,
   saveBuckets,
+  setDensity,
   setLockdown,
-  setPopulation,
 } from './registry';
 import type { BucketDefinition } from './store';
-import { maxWorldCount } from './settings';
+import { managesDensity, maxWorldCount } from './settings';
 
 export interface WorldChanges {
-  population?: unknown;
+  density?: unknown;
   lockdown?: unknown;
 }
 
@@ -91,21 +92,22 @@ export function deleteWorld(id: number, by: string): BucketOutcome {
 }
 
 export function changeWorld(id: number, changes: WorldChanges, by: string): BucketOutcome {
-  const { population, lockdown } = changes;
+  const { density, lockdown } = changes;
 
   if (!bucketExists(id)) {
     return BucketOutcome.UnknownBucket;
   }
 
-  if (
-    (population !== undefined && typeof population !== 'boolean') ||
-    (lockdown !== undefined && !isValidLockdown(lockdown))
-  ) {
+  if ((density !== undefined && !isDensityChange(density)) || (lockdown !== undefined && !isValidLockdown(lockdown))) {
     return BucketOutcome.Failed;
   }
 
-  if (population !== undefined) {
-    setPopulation(id, population);
+  if (density !== undefined && !managesDensity()) {
+    return BucketOutcome.Denied;
+  }
+
+  if (density !== undefined) {
+    setDensity(id, density);
   }
 
   if (lockdown !== undefined) {
@@ -143,6 +145,16 @@ export function transferWorld(from: number, to: number, by: string): BucketOutco
 
 export function who(by: string): string {
   return by.length > 0 ? by : 'Another resource';
+}
+
+function isDensityChange(density: unknown): density is Partial<Density> {
+  if (typeof density !== 'object' || density === null || Array.isArray(density)) {
+    return false;
+  }
+
+  const entries = Object.entries(density);
+
+  return entries.length > 0 && entries.every(([kind, step]) => isDensityKind(kind) && isValidStep(step));
 }
 
 function saved(): BucketOutcome {

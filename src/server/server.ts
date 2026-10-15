@@ -26,7 +26,7 @@ const declaration = new ServerPluginDeclaration('Routing Buckets')
   .addPermission(Permissions.Manage, 'Lets someone create, rename and delete worlds.', true)
   .addPermission(
     Permissions.World,
-    "Lets someone turn a world's ambient traffic and pedestrians on or off, and change its entity lockdown.",
+    "Lets someone change how many pedestrians and cars a world has, and change its entity lockdown.",
     true,
   )
   .addPermission(
@@ -60,6 +60,12 @@ const declaration = new ServerPluginDeclaration('Routing Buckets')
     true,
     'Saves world names and settings to buckets.json so they survive a restart. Needs ' +
       'add_filesystem_permission in your server.cfg.',
+  )
+  .addBoolSetting(
+    SettingNames.ManageDensity,
+    true,
+    'Lets the plugin control how many pedestrians and cars each world has. Off leaves that alone ' +
+      'completely, so another script can control it instead.',
   )
   .addBoolSetting(
     SettingNames.Debug,

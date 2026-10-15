@@ -1,5 +1,6 @@
 import { VMenuServer } from '@vespura/vmenu-plugin/server';
 import { BucketCommands, BucketOutcome, ResultDetails } from '../shared/commands';
+import { fullDensity } from '../shared/density';
 import { BucketEvents } from '../shared/events';
 import { Permissions } from '../shared/names';
 import { DefaultBucket, isValidId, isValidRadius, LockdownInactive } from '../shared/rules';
@@ -9,7 +10,7 @@ import { bucketOf, handle, isReachable, placements, playerExists, playerName } f
 import { moveAndTell } from './moves';
 import { createRateLimit } from './rate-limit';
 import { displayName } from './registry';
-import { allowsSelfJoin, isEnabled } from './settings';
+import { allowsSelfJoin, isEnabled, managesDensity } from './settings';
 import { changeWorld, createWorld, deleteWorld, emptyWorld, renameWorld } from './worlds';
 
 interface Handled {
@@ -30,7 +31,7 @@ const handlers = new Map<string, Handler>([
   [BucketCommands.Evict, evict],
   [BucketCommands.Join, join],
   [BucketCommands.Leave, leave],
-  [BucketCommands.Population, population],
+  [BucketCommands.Density, density],
   [BucketCommands.Lockdown, lockdown],
   [BucketCommands.Reset, reset],
   [BucketCommands.Bring, bring],
@@ -162,19 +163,20 @@ function leave(source: number): Handled {
   return { outcome: BucketOutcome.Ok };
 }
 
-function population(source: number, args: string[]): Handled {
+function density(source: number, args: string[]): Handled {
   if (!allowed(source, Permissions.World)) {
     return { outcome: BucketOutcome.Denied };
   }
 
   const id = readId(args, 0);
-  const flag = args[1];
+  const kind = args[1];
+  const step = readInteger(args, 2);
 
-  if (id === undefined || (flag !== '0' && flag !== '1')) {
+  if (id === undefined || kind === undefined || step === undefined) {
     return { outcome: BucketOutcome.Failed };
   }
 
-  return { outcome: changeWorld(id, { population: flag === '1' }, playerName(source)) };
+  return { outcome: changeWorld(id, { density: { [kind]: step } }, playerName(source)) };
 }
 
 function lockdown(source: number, args: string[]): Handled {
@@ -202,7 +204,11 @@ function reset(source: number, args: string[]): Handled {
     return { outcome: BucketOutcome.Failed };
   }
 
-  return { outcome: changeWorld(id, { population: true, lockdown: LockdownInactive }, playerName(source)) };
+  return { outcome: changeWorld(
+      id,
+      { density: managesDensity() ? fullDensity() : undefined, lockdown: LockdownInactive },
+      playerName(source),
+    ) };
 }
 
 function bring(source: number, args: string[]): Handled {

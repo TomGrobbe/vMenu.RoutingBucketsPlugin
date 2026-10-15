@@ -6,6 +6,8 @@ export const BucketEvents = {
   State: `${Prefix}State`,
   Result: `${Prefix}Result`,
   Moved: `${Prefix}Moved`,
+  Density: `${Prefix}Density`,
+  RequestDensity: `${Prefix}RequestDensity`,
   ServerState: `${Prefix}ServerState`,
   RequestServerState: `${Prefix}RequestServerState`,
   ServerCommand: `${Prefix}ServerCommand`,

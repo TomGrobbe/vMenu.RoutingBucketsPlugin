@@ -5,6 +5,7 @@ import { SettingNames } from '../shared/names';
 import { unpackBucket, unpackOccupant, type PackedBucket, type PackedOccupant } from '../shared/state';
 import { requestState } from './bucket-client';
 import { BucketMenu } from './bucket-menu';
+import { DensityGuard } from './density-guard';
 import { PlayerActionRows } from './player-action-rows';
 import { addTranslations } from './translations';
 import { WorldTools } from './world-tools';
@@ -25,16 +26,24 @@ const allowSelfJoin = plugin.settings.bool(
   'Lets staff move themselves between worlds.',
 );
 
+const manageDensity = plugin.settings.bool(
+  SettingNames.ManageDensity,
+  true,
+  'Lets the plugin control how many pedestrians and cars each world has.',
+);
+
 const debug = plugin.settings.bool(
   SettingNames.Debug,
   false,
   'Prints a line to the console for every world change and every player moved between worlds.',
 );
 
+new DensityGuard().start();
+
 const tools = new WorldTools();
 tools.start();
 
-const menu = new BucketMenu(plugin, enabled, allowSelfJoin, tools);
+const menu = new BucketMenu(plugin, enabled, allowSelfJoin, manageDensity, tools);
 const actions = new PlayerActionRows(plugin, enabled, allowSelfJoin);
 
 onNet(BucketEvents.State, (viewerBucket: number, packedBuckets: PackedBucket[], packedOccupants: PackedOccupant[]) => {

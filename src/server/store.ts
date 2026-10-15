@@ -1,3 +1,4 @@
+import { DensityKinds, densityFractions, emptyDensity, fullDensity, stepFromFraction, type Density } from '../shared/density';
 import { cleanText, isValidLockdown, LockdownInactive, type LockdownMode } from '../shared/rules';
 import { log } from './log';
 import { persistsToDisk } from './settings';
@@ -5,7 +6,7 @@ import { persistsToDisk } from './settings';
 export interface BucketDefinition {
   id: number;
   name: string;
-  populationEnabled: boolean;
+  density: Density;
   lockdownMode: LockdownMode;
 }
 
@@ -44,7 +45,7 @@ export function saveDefinitions(buckets: readonly BucketDefinition[]): boolean {
   }
 
   const resource = GetCurrentResourceName();
-  const json = JSON.stringify({ buckets }, null, 2);
+  const json = JSON.stringify({ buckets: buckets.map(toFile) }, null, 2);
 
   if (SaveResourceFile(resource, FileName, json, -1)) {
     return true;
@@ -122,7 +123,7 @@ function lowerKeys(value: unknown, what: string): Record<string, unknown> {
 }
 
 function readDefinition(raw: Record<string, unknown>, position: number): BucketDefinition {
-  const { id, name = '', populationenabled = true, lockdownmode = LockdownInactive } = raw;
+  const { id, name = '', density, populationenabled = true, lockdownmode = LockdownInactive } = raw;
 
   if (typeof id !== 'number' || !Number.isInteger(id)) {
     throw new Error(`bucket ${position} has no whole number "id"`);
@@ -139,7 +140,44 @@ function readDefinition(raw: Record<string, unknown>, position: number): BucketD
   return {
     id,
     name: cleanText(name ?? ''),
-    populationEnabled: populationenabled,
+    // Files from before the density sliders only have the old on or off switch.
+    density:
+      density === undefined
+        ? populationenabled
+          ? fullDensity()
+          : emptyDensity()
+        : readDensity(lowerKeys(density, `the "density" of bucket ${position}`), position),
     lockdownMode: isValidLockdown(lockdownmode) ? lockdownmode : LockdownInactive,
+  };
+}
+
+function readDensity(raw: Record<string, unknown>, position: number): Density {
+  const density = fullDensity();
+
+  for (const kind of DensityKinds) {
+    const value = raw[kind];
+
+    if (value === undefined) {
+      continue;
+    }
+
+    const step = stepFromFraction(value);
+
+    if (step === undefined) {
+      throw new Error(`bucket ${position} has a "${kind}" density that is not a number from 0 to 1`);
+    }
+
+    density[kind] = step;
+  }
+
+  return density;
+}
+
+function toFile(definition: BucketDefinition): Record<string, unknown> {
+  return {
+    id: definition.id,
+    name: definition.name,
+    density: densityFractions(definition.density),
+    lockdownMode: definition.lockdownMode,
   };
 }

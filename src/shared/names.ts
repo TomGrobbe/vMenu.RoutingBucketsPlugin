@@ -12,5 +12,6 @@ export const SettingNames = {
   MaxWorlds: 'MaxWorlds',
   DefaultLockdown: 'DefaultLockdown',
   Persist: 'Persist',
+  ManageDensity: 'ManageDensity',
   Debug: 'Debug',
 } as const;
