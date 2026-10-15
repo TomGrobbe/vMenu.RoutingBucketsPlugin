@@ -70,9 +70,18 @@ const English: Record<string, string> = {
   'rb.goto.desc': 'Moves you into this world. You stay where you are standing, the world around you changes.',
   'rb.goto.here': 'You are already in this world.',
 
-  'rb.population': 'Ambient traffic and pedestrians',
-  'rb.population.desc':
-    'Whether the game spawns its usual traffic and people in this world. Off leaves an empty city, which is what you usually want for an event.',
+  'rb.density.peds': 'Pedestrians',
+  'rb.density.peds.desc':
+    'How many people walk around in this world. 1.0 is the normal amount, 0.5 is half, 0.0 is nobody at all.',
+  'rb.density.scenarios': 'People at spots',
+  'rb.density.scenarios.desc':
+    'How many people sit on benches, stand at bars, smoke outside shops and so on. 1.0 is normal, 0.0 is nobody.',
+  'rb.density.traffic': 'Traffic',
+  'rb.density.traffic.desc':
+    'How many cars drive around in this world. 1.0 is normal traffic, 0.0 leaves the roads empty.',
+  'rb.density.parked': 'Parked cars',
+  'rb.density.parked.desc':
+    'How many cars stand parked along the streets and in car parks. 1.0 is normal, 0.0 is none.',
 
   'rb.lockdown': 'Entity lockdown',
   'rb.lockdown.desc':
@@ -82,7 +91,7 @@ const English: Record<string, string> = {
   'rb.lockdown.strict': 'Strict',
 
   'rb.reset': "Reset this world's settings",
-  'rb.reset.desc': 'Puts ambient traffic back on and entity lockdown back to inactive.',
+  'rb.reset.desc': 'Puts pedestrians, traffic and parked cars back to 1.0, and entity lockdown back to inactive.',
 
   'rb.evict': 'Move everyone to the main world',
   'rb.evict.desc':

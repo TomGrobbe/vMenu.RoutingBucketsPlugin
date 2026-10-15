@@ -4,7 +4,7 @@ export const BucketCommands = {
   Delete: 'delete',
   Join: 'join',
   Leave: 'leave',
-  Population: 'population',
+  Density: 'density',
   Lockdown: 'lockdown',
   Reset: 'reset',
   Evict: 'evict',

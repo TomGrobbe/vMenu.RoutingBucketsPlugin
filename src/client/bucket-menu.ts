@@ -14,6 +14,7 @@ import {
   type VMenuPlugin,
 } from '@vespura/vmenu-plugin/client';
 import { BucketCommands } from '../shared/commands';
+import { DensityKinds, DensitySteps, toFraction, type DensityKind } from '../shared/density';
 import { Permissions } from '../shared/names';
 import { DefaultBucket, lockdownFromIndex, lockdownToIndex, MaxNameLength, Radii } from '../shared/rules';
 import type { BucketRow, OccupantRow } from '../shared/state';
@@ -23,14 +24,17 @@ import type { WorldTools } from './world-tools';
 
 // vMenu skips rows past its own limit, so the worlds list stays under it with room for the other rows.
 const RowBudget = 1800;
-const RowsPerWorld = 11;
+const RowsPerWorld = 14;
 const MaxOccupantRows = 20;
+// Scrolling a list fires on every step, so only the value it settles on goes to the server.
+const DensitySendDelayMs = 500;
+const DensityOptions = Array.from({ length: DensitySteps + 1 }, (_, step) => toFraction(step).toFixed(1));
 
 interface WorldRows {
   link: PluginSubmenu;
   occupants: PluginSubmenu;
   goto: PluginButton;
-  population: PluginCheckbox;
+  density: Record<DensityKind, PluginList>;
   lockdown: PluginList;
   reset: PluginButton;
   evict: PluginConfirmButton;
@@ -53,10 +57,12 @@ interface Layout {
 export class BucketMenu {
   private readonly worlds = new Map<number, WorldRows>();
   private readonly order: number[] = [];
+  private readonly pendingDensity = new Map<string, CitizenTimer>();
   private readonly viewGate: Gate;
   private readonly joinGate: Gate;
   private readonly manageGate: Gate;
   private readonly worldGate: Gate;
+  private readonly densityGate: Gate;
   private readonly moveGate: Gate;
 
   private layout?: Layout;
@@ -68,6 +74,7 @@ export class BucketMenu {
     private readonly plugin: VMenuPlugin,
     enabled: PluginBoolSetting,
     allowSelfJoin: PluginBoolSetting,
+    manageDensity: PluginBoolSetting,
     private readonly tools: WorldTools,
   ) {
     const on = Gate.setting(enabled);
@@ -76,6 +83,7 @@ export class BucketMenu {
     this.joinGate = Gate.permission(Permissions.Join).and(on).and(Gate.setting(allowSelfJoin));
     this.manageGate = Gate.permission(Permissions.Manage).and(on);
     this.worldGate = Gate.permission(Permissions.World).and(on);
+    this.densityGate = this.worldGate.and(Gate.setting(manageDensity));
     this.moveGate = Gate.permission(Permissions.Move).and(on);
   }
 
@@ -339,13 +347,9 @@ export class BucketMenu {
     });
     goto.onSelected(() => sendCommand(BucketCommands.Join, id));
 
-    const population = menu.addCheckbox(Text.key('rb.population'), {
-      checked: bucket.populationEnabled,
-      description: Text.key('rb.population.desc'),
-      gate: this.worldGate,
-      hideWhenLocked: true,
-    });
-    population.onChanged((checked) => sendCommand(BucketCommands.Population, id, checked ? '1' : '0'));
+    const density = Object.fromEntries(
+      DensityKinds.map((kind) => [kind, this.buildDensity(menu, id, kind, bucket.density[kind])]),
+    ) as Record<DensityKind, PluginList>;
 
     const lockdown = menu.addList(
       Text.key('rb.lockdown'),
@@ -393,7 +397,37 @@ export class BucketMenu {
       this.reopenRoot = true;
     });
 
-    return { link, occupants, goto, population, lockdown, reset, evict, rename, delete: remove, occupantLines: [] };
+    return { link, occupants, goto, density, lockdown, reset, evict, rename, delete: remove, occupantLines: [] };
+  }
+
+  private buildDensity(menu: PluginMenu, id: number, kind: DensityKind, step: number): PluginList {
+    const list = menu.addList(Text.key(`rb.density.${kind}`), DensityOptions, {
+      selectedIndex: step,
+      description: Text.key(`rb.density.${kind}.desc`),
+      gate: this.densityGate,
+      hideWhenLocked: true,
+    });
+
+    const key = `${id}:${kind}`;
+
+    list.onIndexChanged((_, index) => {
+      const pending = this.pendingDensity.get(key);
+
+      if (pending) {
+        clearTimeout(pending);
+      }
+
+      this.pendingDensity.set(
+        key,
+        setTimeout(() => {
+          this.pendingDensity.delete(key);
+
+          sendCommand(BucketCommands.Density, id, kind, index);
+        }, DensitySendDelayMs),
+      );
+    });
+
+    return list;
   }
 
   private refresh(layout: Layout, buckets: readonly BucketRow[], occupants: readonly OccupantRow[]): void {
@@ -433,7 +467,10 @@ export class BucketMenu {
       rows.link.menu.title = name;
       rows.link.description = Text.key(bucket.managed ? 'rb.world.desc' : 'rb.world.unmanaged.desc', { id });
 
-      rows.population.visible = bucket.managed;
+      for (const kind of DensityKinds) {
+        rows.density[kind].visible = bucket.managed;
+      }
+
       rows.lockdown.visible = bucket.managed;
       rows.reset.visible = bucket.managed;
       rows.rename.visible = editable;
@@ -442,7 +479,12 @@ export class BucketMenu {
       rows.goto.enabled = !isHere;
       rows.goto.description = Text.key(isHere ? 'rb.goto.here' : 'rb.goto.desc');
 
-      rows.population.checked = bucket.populationEnabled;
+      for (const kind of DensityKinds) {
+        if (!this.pendingDensity.has(`${bucket.id}:${kind}`)) {
+          rows.density[kind].selectedIndex = bucket.density[kind];
+        }
+      }
+
       rows.lockdown.selectedIndex = lockdownToIndex(bucket.lockdown);
 
       rows.evict.enabled = bucket.occupants > 0;

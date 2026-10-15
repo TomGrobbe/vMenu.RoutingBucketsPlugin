@@ -1,9 +1,10 @@
+import { packDensity, unpackDensity, type Density, type PackedDensity } from './density';
 import { lockdownFromIndex, lockdownToIndex, type LockdownMode } from './rules';
 
 export interface BucketRow {
   id: number;
   managed: boolean;
-  populationEnabled: boolean;
+  density: Density;
   lockdown: LockdownMode;
   occupants: number;
   name: string;
@@ -19,7 +20,7 @@ export interface OccupantRow {
 export type PackedBucket = [
   id: number,
   managed: 0 | 1,
-  population: 0 | 1,
+  density: PackedDensity,
   lockdown: number,
   occupants: number,
   name: string,
@@ -31,18 +32,18 @@ export function packBucket(row: BucketRow): PackedBucket {
   return [
     row.id,
     row.managed ? 1 : 0,
-    row.populationEnabled ? 1 : 0,
+    packDensity(row.density),
     lockdownToIndex(row.lockdown),
     row.occupants,
     row.name,
   ];
 }
 
-export function unpackBucket([id, managed, population, lockdown, occupants, name]: PackedBucket): BucketRow {
+export function unpackBucket([id, managed, density, lockdown, occupants, name]: PackedBucket): BucketRow {
   return {
     id,
     managed: managed === 1,
-    populationEnabled: population === 1,
+    density: unpackDensity(density),
     lockdown: lockdownFromIndex(lockdown),
     occupants,
     name,

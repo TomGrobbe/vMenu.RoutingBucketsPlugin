@@ -5,8 +5,8 @@ separate worlds FiveM can split a server into. People in different worlds share 
 cannot see each other at all.
 
 It lets staff create worlds and name them, see who is in each one, move themselves and other players
-between them, and turn a world's ambient traffic and entity lockdown on or off. Names and settings
-are saved, so a restart keeps them.
+between them, choose how busy each world is, and change its entity lockdown. Names and settings are
+saved, so a restart keeps them.
 
 ## Installing
 
@@ -38,7 +38,7 @@ rest for admins, which you can of course change to whatever suits your server.
 | `View` | everyone | Opening the menu, seeing the worlds and who is in them |
 | `Join` | everyone | Moving yourself between worlds |
 | `Manage` | admin | Creating, renaming and deleting worlds |
-| `World` | admin | Changing a world's ambient traffic and entity lockdown |
+| `World` | admin | Changing how busy a world is, and its entity lockdown |
 | `Move` | admin | Moving other players between worlds, and emptying a world |
 
 ```ini
@@ -49,6 +49,38 @@ add_ace group.admin "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.Move" all
 add_ace builtin.everyone "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.View" allow
 add_ace group.admin "vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.World" allow
 ```
+
+## How busy a world is
+
+Every world has four lists in its menu, one for each kind of thing the game fills the city with on its
+own:
+
+- **Pedestrians**, the people walking around.
+- **People at spots**, the people sitting on benches, standing at bars or smoking outside shops.
+- **Traffic**, the cars driving around.
+- **Parked cars**, the cars standing along the streets and in car parks.
+
+Each one goes from 0.0 to 1.0 in steps of 0.1. Think of it as a percentage: 1.0 is what the game
+normally does, 0.5 is half of that, and 0.0 is none at all. So you could have a quiet world with a few
+people walking around (0.1), half the usual parked cars (0.5) and almost normal traffic (0.9).
+
+A change only stops new people and cars from appearing. Whatever is already standing or driving around
+stays until the game cleans it up on its own, which happens once you move away from it.
+
+### Letting another script handle it
+
+If you already have a script that controls pedestrians and traffic, the plugin and that script would
+fight over it. Turn off the `ManageDensity` setting in the configuration file and the plugin keeps its
+hands off completely. The four lists disappear from the menu, and the plugin no longer changes how
+many people and cars there are, so your other script is in charge.
+
+```ini
+setr vMenu.Enhanced.Plugins.vMenu_RoutingBucketsPlugin.ManageDensity false
+```
+
+The values you set earlier stay saved, so turning the setting back on later brings them back. If you
+turn it off while the server is running, restart the server once afterwards so FiveM forgets the
+settings the plugin had already given it.
 
 ## Seeing what happens
 

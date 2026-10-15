@@ -1,7 +1,8 @@
+import { fullDensity, isEmpty, type Density } from '../shared/density';
 import { DefaultBucket, isValidId, LockdownInactive, MaxId, type LockdownMode } from '../shared/rules';
 import { log } from './log';
 import { placements } from './occupancy';
-import { newWorldLockdown } from './settings';
+import { managesDensity, newWorldLockdown } from './settings';
 import { loadDefinitions, saveDefinitions, type BucketDefinition } from './store';
 
 export const DefaultName = 'Main World';
@@ -36,6 +37,10 @@ export function allBuckets(): BucketDefinition[] {
 
 export function bucketExists(id: number): boolean {
   return buckets.has(id);
+}
+
+export function densityOf(id: number): Density {
+  return buckets.get(id)?.density ?? fullDensity();
 }
 
 export function displayName(id: number): string {
@@ -78,7 +83,7 @@ export function createBucket(normalizedName: string): BucketDefinition | undefin
   const definition: BucketDefinition = {
     id,
     name: normalizedName,
-    populationEnabled: true,
+    density: fullDensity(),
     lockdownMode: newWorldLockdown(),
   };
 
@@ -106,19 +111,19 @@ export function deleteBucket(id: number): boolean {
     return false;
   }
 
-  apply({ id, name: '', populationEnabled: true, lockdownMode: LockdownInactive });
+  apply({ id, name: '', density: fullDensity(), lockdownMode: LockdownInactive });
 
   return true;
 }
 
-export function setPopulation(id: number, enabled: boolean): boolean {
+export function setDensity(id: number, changes: Partial<Density>): boolean {
   const definition = buckets.get(id);
 
   if (!definition) {
     return false;
   }
 
-  definition.populationEnabled = enabled;
+  definition.density = { ...definition.density, ...changes };
 
   apply(definition);
 
@@ -155,14 +160,17 @@ function ensureDefault(): void {
   buckets.set(DefaultBucket, {
     id: DefaultBucket,
     name: DefaultName,
-    populationEnabled: true,
+    density: fullDensity(),
     lockdownMode: LockdownInactive,
   });
 }
 
 function apply(definition: BucketDefinition): void {
   try {
-    SetRoutingBucketPopulationEnabled(definition.id, definition.populationEnabled);
+    if (managesDensity()) {
+      SetRoutingBucketPopulationEnabled(definition.id, !isEmpty(definition.density));
+    }
+
     SetRoutingBucketEntityLockdownMode(definition.id, definition.lockdownMode);
   } catch (error) {
     log.error(`Could not apply settings to world ${definition.id}: ${(error as Error).message}`);

@@ -18,6 +18,10 @@ export function persistsToDisk(): boolean {
   return GetConvarBool(Prefix + SettingNames.Persist, true);
 }
 
+export function managesDensity(): boolean {
+  return GetConvarBool(Prefix + SettingNames.ManageDensity, true);
+}
+
 export function logsDebug(): boolean {
   return GetConvarBool(Prefix + SettingNames.Debug, false);
 }

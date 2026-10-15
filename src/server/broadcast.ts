@@ -1,10 +1,11 @@
 import { VMenuServer } from '@vespura/vmenu-plugin/server';
+import { densityFractions, fullDensity, isEmpty, packDensity, type Density } from '../shared/density';
 import { BucketEvents } from '../shared/events';
 import { Permissions } from '../shared/names';
 import { packBucket, packOccupant, type BucketRow, type PackedBucket, type PackedOccupant } from '../shared/state';
-import { bucketOf, handle, playerExists, snapshot, type Occupant } from './occupancy';
-import { allBuckets, bucketExists, displayName } from './registry';
-import { isEnabled } from './settings';
+import { bucketOf, handle, placements, playerExists, snapshot, type Occupant } from './occupancy';
+import { allBuckets, bucketExists, displayName, densityOf } from './registry';
+import { isEnabled, managesDensity } from './settings';
 import type { BucketDefinition } from './store';
 
 const TickMs = 2000;
@@ -20,12 +21,16 @@ let lastState = '';
 let lastWorlds = '';
 const lastRequest = new Map<number, number>();
 const pendingRequests = new Set<number>();
+const sentDensity = new Map<number, string>();
 
 export function registerBroadcast(): void {
   on('playerDropped', () => {
     lastState = '';
     lastRequest.delete(source);
+    sentDensity.delete(source);
   });
+
+  onNet(BucketEvents.RequestDensity, () => sendDensity(source, densityOf(bucketOf(source))));
 
   on(BucketEvents.RequestServerState, () => publishWorlds(allBuckets(), true));
 
@@ -38,6 +43,7 @@ export function pushNow(): void {
   const definitions = allBuckets();
 
   publishWorlds(definitions);
+  syncDensity();
 
   if (!isEnabled()) {
     lastState = '';
@@ -86,6 +92,7 @@ function tick(): void {
   const definitions = allBuckets();
 
   publishWorlds(definitions);
+  syncDensity();
 
   if (!isEnabled()) {
     lastState = '';
@@ -105,6 +112,30 @@ function tick(): void {
   sendToEveryone(state);
 }
 
+// FiveM's own population switch does not always reach a game that rejoins, and it has no in between anyway.
+function syncDensity(): void {
+  for (const { serverId, bucket } of placements()) {
+    const density = densityOf(bucket);
+
+    if (sentDensity.get(serverId) !== densityKey(density)) {
+      sendDensity(serverId, density);
+    }
+  }
+}
+
+// Null tells the game to stop setting density, so other scripts are free to.
+function sendDensity(serverId: number, density: Density): void {
+  const packed = managesDensity() ? packDensity(density) : null;
+
+  sentDensity.set(serverId, densityKey(density));
+
+  emitNet(BucketEvents.Density, serverId, packed);
+}
+
+function densityKey(density: Density): string {
+  return managesDensity() ? JSON.stringify(packDensity(density)) : 'unmanaged';
+}
+
 function build(definitions: readonly BucketDefinition[]): State {
   const everyone = snapshot();
   const counts = new Map<number, number>();
@@ -116,7 +147,7 @@ function build(definitions: readonly BucketDefinition[]): State {
   const buckets: BucketRow[] = definitions.map((definition) => ({
     id: definition.id,
     managed: true,
-    populationEnabled: definition.populationEnabled,
+    density: definition.density,
     lockdown: definition.lockdownMode,
     occupants: counts.get(definition.id) ?? 0,
     name: definition.name,
@@ -124,7 +155,7 @@ function build(definitions: readonly BucketDefinition[]): State {
 
   for (const [id, occupants] of counts) {
     if (!bucketExists(id)) {
-      buckets.push({ id, managed: false, populationEnabled: true, lockdown: 'inactive', occupants, name: '' });
+      buckets.push({ id, managed: false, density: fullDensity(), lockdown: 'inactive', occupants, name: '' });
     }
   }
 
@@ -158,7 +189,8 @@ function publishWorlds(definitions: readonly BucketDefinition[], force = false):
     buckets: definitions.map((definition) => ({
       id: definition.id,
       name: displayName(definition.id),
-      population: definition.populationEnabled,
+      population: !isEmpty(definition.density),
+      density: densityFractions(definition.density),
       lockdown: definition.lockdownMode,
     })),
   });

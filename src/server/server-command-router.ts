@@ -1,4 +1,5 @@
 import { BucketOutcome } from '../shared/commands';
+import { emptyDensity, fullDensity, stepFromFraction } from '../shared/density';
 import { BucketEvents } from '../shared/events';
 import { cleanText, isValidId } from '../shared/rules';
 import { pushNow } from './broadcast';
@@ -71,11 +72,32 @@ function worldSettings(p: Params): Handled {
 
   const lockdown = readString(p, 'lockdown');
   const changes = {
-    population: typeof p['population'] === 'boolean' ? p['population'] : undefined,
+    density: readDensity(p),
     lockdown: lockdown.length > 0 ? lockdown : undefined,
   };
 
   return { outcome: changeWorld(id, changes, operator(p)) };
+}
+
+// Callers from before the density sliders send the old on or off switch as "population".
+function readDensity(p: Params): unknown {
+  const density = p['density'];
+
+  if (typeof density === 'object' && density !== null && !Array.isArray(density)) {
+    return Object.fromEntries(Object.entries(density).map(([kind, fraction]) => [kind, stepFromFraction(fraction)]));
+  }
+
+  if (density !== undefined) {
+    return density;
+  }
+
+  const population = p['population'];
+
+  if (typeof population === 'boolean') {
+    return population ? fullDensity() : emptyDensity();
+  }
+
+  return undefined;
 }
 
 function remove(p: Params): Handled {
